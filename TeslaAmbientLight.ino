@@ -135,9 +135,6 @@ void loop() {
 */
   } else {
     getStateFromMaster();
-  }
-
-  if (role > 0) {
     strip.setBrightness(brightness);
     setColorByState();
     fadeColor();

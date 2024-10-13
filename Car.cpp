@@ -42,8 +42,27 @@ void Car::_processDisplayOn(unsigned char len, unsigned char data[]) {
   //brightness = map(data[2], 0x0B, 0xC8, 0, 0xFF);
 }
 
+void Car::_processAutopilot(unsigned char len, unsigned char data[]) {
+  blindSpotLeft = ((data[0] >> 4) && 0x03) > 0;
+  blindSpotRight = ((data[0] >> 6) && 0x03) > 0;
+  blindSpotLeftAlert = ((data[0] >> 4) && 0x03) > 1;
+  blindSpotRightAlert = ((data[0] >> 6) && 0x03) > 1;
+  /*Serial.print(blindSpotLeft);
+  Serial.print("     ");
+  Serial.print(blindSpotRight);
+  Serial.print("     ");
+  Serial.print(blindSpotLeftAlert);
+  Serial.print("     ");
+  Serial.print(blindSpotRightAlert);
+  Serial.println();*/
+}
+
 void Car::_processLights(unsigned char len, unsigned char data[]) {
-  // _printMessage(len, data, false);
+  turningRightLight = (data[0] & 0x08) == 0x08;
+  turningRight = (data[0] & 0x04) == 0x04;
+  turningLeftLight = (data[0] & 0x02) == 0x02;
+  turningLeft = (data[0] & 0x01) == 0x01;
+
   if (data[2] == 0x00) {
     brightness = 0;
     displayOn = false;
@@ -56,7 +75,7 @@ void Car::_processLights(unsigned char len, unsigned char data[]) {
       brightness = map(v, 0x0B, 0xC8, 0, 0xFF);
       if (brightness < 34)
         brightness = 34;
-      brightness = map(brightness, 34, 0xFF, 5, 0xFF);
+      brightness = map(brightness, 34, 0xFF, 5, 0x60);
     }
   }
 }
@@ -132,7 +151,7 @@ void Car::process() {
   if (_c_enabled) {
     _CCAN->readMsgBuf(&rxId, &len, rxBuf);  // Read data: len = data length, buf = data byte(s)
     if (rxId == 0x399) {
-      //processAutopilot(len, rxBuf);
+      _processAutopilot(len, rxBuf);
     } else if (rxId == 0x39D) {
       //processBrake(len, rxBuf);
     } else if (rxId == 0x3F8) {

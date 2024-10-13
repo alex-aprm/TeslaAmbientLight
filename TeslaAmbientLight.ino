@@ -9,6 +9,8 @@
 
 //#include "Utils.cpp"
 #include "Car.h"
+#include "Light.h"
+
 #define LED_PIN 12
 #define NUMPIXELS 134
 
@@ -18,31 +20,13 @@ const char* udpAddress = "255.255.255.255";
 const int udpPort = 3333;
 WiFiUDP udp;
 
-enum DoorState : byte { WAIT,
-                        DOOR_OPEN,
-                        DOOR_WAIT,
-                        IDLE_INIT,
-                        IDLE,
-                        TURNING,
-                        TURNING_LIGHT,
-                        BLIND_SPOT,
-                        TURNING_BLIND_SPOT,
-                        TURNING_LIGHT_BLIND_SPOT };
-DoorState doorLightState[4] = { WAIT, WAIT, WAIT, WAIT };
-unsigned long doorLightMs[4] = { 0, 0, 0, 0 };
-unsigned long doorLightAge[4] = { 0, 0, 0, 0 };
-
 Adafruit_NeoPixel strip(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
 double currentColor[3][NUMPIXELS];
 double oldColor[3][NUMPIXELS];
 double targetColor[3][NUMPIXELS];
 
-unsigned char autopilotState[8];
-unsigned char driveAssistState[8];
-unsigned char gtw[8] = { 0x02, 0x7F, 0x56, 0x2C, 0xDE, 0x4D, 0xD6, 0xA2 };
-unsigned char lever[3] = { 0x00, 0x10, 0x00 };
-
 Car car;
+Light light;
 
 unsigned char role = 10;
 
@@ -107,12 +91,8 @@ void setup() {
   ArduinoOTA.begin();
 
   for (int i = 0; i < NUMPIXELS; i++) {
-    targetColor[0][i] = 0;
-    targetColor[1][i] = 0;
-    targetColor[2][i] = 0;
-    currentColor[0][i] = 0;
-    currentColor[1][i] = 0;
-    currentColor[2][i] = 0;
+    setTargetColor(i, 0, 0, 0);
+    setCurrentColor(i, 0, 0, 0);
   }
 }
 
@@ -126,157 +106,60 @@ unsigned long stateAge;
 void loop() {
   ArduinoOTA.handle();
   if (role == 0) {
-    getStateFromCar();
+    car.process();
+    light.processCarState(car);
+    if (light.allWait || light.allIdle)
+      udpInterval = 1000;
+    else
+      udpInterval = 50;
+
+    if (light.stateChanged || (millis() - lastUdp > udpInterval)) {
+      udp.beginPacket(udpAddress, udpPort);
+      udp.write(light.brightness);
+      for (byte i = 0; i < 4; i++) {
+        udp.write(light.doorLightState[i]);
+        udp.write((byte)light.doorLightAge[i]);
+        udp.write((byte)(light.doorLightAge[i] >> 8));
+        udp.write((byte)(light.doorLightAge[i] >> 16));
+        udp.write((byte)(light.doorLightAge[i] >> 24));
+      }
+      udp.endPacket();
+      lastUdp = millis();
+      light.stateChanged = false;
+    }
+/*
+    byte doorNum = 0;
+    brightness = light.brightness;
+    state = light.doorLightState[doorNum];
+    stateAge = light.doorLightAge[doorNum];
+*/
   } else {
     getStateFromMaster();
   }
 
-  strip.setBrightness(brightness);
-  setColorByState();
-  fadeColor();
+  if (role > 0) {
+    strip.setBrightness(brightness);
+    setColorByState();
+    fadeColor();
 
-  //strip.clear();
-  bool changed = false;
-  for (int i = 0; i < NUMPIXELS; i++) {
-    if (oldColor[0][i] != currentColor[0][i] || oldColor[1][i] != currentColor[1][i] || oldColor[2][i] != currentColor[2][i]) {
-      changed = true;
-      oldColor[0][i] == currentColor[0][i];
-      oldColor[1][i] == currentColor[1][i];
-      oldColor[2][i] == currentColor[2][i];
-    }
-  }
-  if (changed) {
-    strip.clear();
+    //strip.clear();
+    bool changed = false;
     for (int i = 0; i < NUMPIXELS; i++) {
-      strip.setPixelColor(i, strip.Color(round(currentColor[0][i]), round(currentColor[1][i]), round(currentColor[2][i])));
+      if (oldColor[0][i] != currentColor[0][i] || oldColor[1][i] != currentColor[1][i] || oldColor[2][i] != currentColor[2][i]) {
+        changed = true;
+        oldColor[0][i] == currentColor[0][i];
+        oldColor[1][i] == currentColor[1][i];
+        oldColor[2][i] == currentColor[2][i];
+      }
     }
-    strip.show();
-  }
-  // Serial.println();
-}
-
-void getStateFromCar() {
-  car.process();
-  long now = millis();
-  /*
-Serial.print("Display ");
-Serial.println(car.displayOn);
-  */
-
-  for (byte i = 0; i < 4; i++) {
-    if (doorLightState[i] == IDLE_INIT && now - doorLightMs[i] > 500)
-      changeDoorLightState(i, IDLE);
-  }
-
-  bool someDoorOpen = false;
-  for (byte i = 0; i < 4; i++) {
-    someDoorOpen = car.doorOpen[i] || someDoorOpen;
-    if (car.doorOpen[i] && doorLightState[i] != DOOR_OPEN)
-      changeDoorLightState(i, DOOR_OPEN);
-    if (!car.doorOpen[i] && doorLightState[i] == DOOR_OPEN)
-      changeDoorLightState(i, IDLE_INIT);
-  }
-
-  if (someDoorOpen) {
-    for (byte i = 0; i < 4; i++)
-      if (!car.doorOpen[i] && doorLightState[i] != DOOR_WAIT)
-        changeDoorLightState(i, DOOR_WAIT);
-  } else {
-    for (byte i = 0; i < 4; i++)
-      if (doorLightState[i] == DOOR_WAIT)
-        changeDoorLightState(i, IDLE_INIT);
-  }
-
-  for (byte i = 0; i < 4; i++)
-    doorLightAge[i] = millis() - doorLightMs[i];
-
-  if (!car.displayOn) {
-    for (byte i = 0; i < 4; i++)
-      if (doorLightState[i] == IDLE || doorLightState[i] == IDLE_INIT)
-        changeDoorLightState(i, WAIT);
-  } else {
-    for (byte i = 0; i < 4; i++)
-      if (doorLightState[i] == WAIT)
-        changeDoorLightState(i, IDLE_INIT);
-  }
-
-  for (byte i = 0; i < 2; i++) {
-    bool blindSpot = car.blindSpotRight;
-    bool turning = car.turningRight;
-    bool turningLight = car.turningRightLight;
-    if (i == 1) {
-      blindSpot = car.blindSpotLeft;
-      turning = car.turningLeft;
-      turningLight = car.turningLeftLight;
+    if (changed) {
+      strip.clear();
+      for (int i = 0; i < NUMPIXELS; i++) {
+        strip.setPixelColor(i, strip.Color(round(currentColor[0][i]), round(currentColor[1][i]), round(currentColor[2][i])));
+      }
+      strip.show();
     }
-    if (blindSpot) {
-      if (doorLightState[i] == IDLE)
-        changeDoorLightState(i, BLIND_SPOT);
-      if (doorLightState[i] == TURNING)
-        changeDoorLightState(i, TURNING_BLIND_SPOT);
-      if (doorLightState[i] == TURNING_LIGHT)
-        changeDoorLightState(i, TURNING_LIGHT_BLIND_SPOT);
-    }
-    if (!blindSpot) {
-      if (doorLightState[i] == BLIND_SPOT)
-        changeDoorLightState(i, IDLE);
-      if (doorLightState[i] == TURNING_BLIND_SPOT)
-        changeDoorLightState(i, TURNING);
-      if (doorLightState[i] == TURNING_LIGHT_BLIND_SPOT)
-        changeDoorLightState(i, TURNING_LIGHT);
-    }
-    if (turning && (doorLightState[i] == IDLE || doorLightState[i] == TURNING_LIGHT))
-      changeDoorLightState(i, TURNING);
-    if (turningLight && (doorLightState[i] == IDLE || doorLightState[i] == TURNING))
-      changeDoorLightState(i, TURNING_LIGHT);
-    if (turning && (doorLightState[i] == BLIND_SPOT || doorLightState[i] == TURNING_LIGHT_BLIND_SPOT))
-      changeDoorLightState(i, TURNING_BLIND_SPOT);
-    if (turningLight && (doorLightState[i] == IDLE || doorLightState[i] == TURNING_BLIND_SPOT))
-      changeDoorLightState(i, TURNING_LIGHT_BLIND_SPOT);
-    if (!turningLight && !turning && (doorLightState[i] == TURNING_LIGHT || doorLightState[i] == TURNING))
-      changeDoorLightState(i, IDLE);
-    if (!turningLight && !turning && (doorLightState[i] == TURNING_LIGHT_BLIND_SPOT || doorLightState[i] == TURNING_BLIND_SPOT))
-      changeDoorLightState(i, BLIND_SPOT);
   }
-
-  bool allWait = true;
-  for (byte i = 0; i < 4; i++)
-    allWait = (doorLightState[i] == WAIT) && allWait;
-  bool allIdle = true;
-  for (byte i = 0; i < 4; i++)
-    allIdle = (doorLightState[i] == IDLE) && allIdle;
-
-  if (allWait || allIdle)
-    udpInterval = 1000;
-  else
-    udpInterval = 50;
-
-  byte oldBrightness = brightness;
-  brightness = car.brightness;
-
-  stateChanged = stateChanged || (oldBrightness != brightness);
-
-  if (someDoorOpen && brightness < 100)
-    brightness += 100;
-
-  if (stateChanged || (millis() - lastUdp > udpInterval)) {
-    udp.beginPacket(udpAddress, udpPort);
-    udp.write(brightness);
-    for (byte i = 0; i < 4; i++) {
-      udp.write(doorLightState[i]);
-      udp.write((byte)doorLightAge[i]);
-      udp.write((byte)(doorLightAge[i] >> 8));
-      udp.write((byte)(doorLightAge[i] >> 16));
-      udp.write((byte)(doorLightAge[i] >> 24));
-    }
-    udp.endPacket();
-    lastUdp = millis();
-    stateChanged = false;
-  }
-
-  byte doorNum = 0;
-  state = doorLightState[doorNum];
-  stateAge = doorLightAge[doorNum];
 }
 
 long unsigned int lastUdpMs;
@@ -392,24 +275,7 @@ void fadeColor() {
 
       double needToChange = delta * step / left;
       currentColor[c][i] += needToChange;
-      /* if (c == 2 && i == 0) {
-        Serial.print("delta = ");
-        Serial.print(delta);
-        Serial.print(" current = ");
-        Serial.print(currentColor[c][i]);
-        Serial.println();
-      }*/
     }
   }
   colorTransitionLastMs = millis();
-}
-
-void changeDoorLightState(byte door, DoorState state) {
-  doorLightState[door] = state;
-  doorLightMs[door] = millis();
-  stateChanged = true;
-  Serial.print("Door ");
-  Serial.print(door);
-  Serial.print(" changed to ");
-  Serial.println(state);
 }

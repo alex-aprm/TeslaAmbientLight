@@ -1,3 +1,5 @@
+#ifndef CAR_H
+#define CAR_H
 #include <mcp_can.h>
 #include <Arduino.h>
 
@@ -32,3 +34,4 @@ private:
   void _monitor(long unsigned int rxId, unsigned char len, unsigned char rxBuf[]);
   void _printMessage(unsigned char len, unsigned char data[], bool out);
 };
+#endif

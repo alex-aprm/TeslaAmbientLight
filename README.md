@@ -53,7 +53,7 @@ My TM3 is RWD, it has door pocket lights but they are inactive. I took these wir
 - Fuse with holder
 
 **Please, make sure you know what to do and have an experience with electricity. Disconnect both batteries before proceed.
-Do this to your own risk.**
+Do this at your own risk.**
 
 # Wiring
 

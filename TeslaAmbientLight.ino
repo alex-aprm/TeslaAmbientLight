@@ -54,6 +54,7 @@ void setup() {
     WiFi.softAP(ssid, password);
     //blinkSuccess(strip);
   } else {
+    delay(300);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -112,10 +113,11 @@ void loop() {
   if (role == 0) {
     car.process();
     light.processCarState(car);
-    if (light.allWait || light.allIdle)
-      udpInterval = 1000;
-    else
-      udpInterval = 50;
+    if (light.allWait || light.allIdle) {
+      //delay(50);
+      udpInterval = 10000;
+    } else
+      udpInterval = 100;
 
     if (light.stateChanged || (millis() - lastUdp > udpInterval)) {
       udp.beginPacket(udpAddress, udpPort);

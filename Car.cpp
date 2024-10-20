@@ -16,6 +16,7 @@ void Car::init(byte v_pin, byte c_pin) {
     _CCAN->init_Mask(1, 0, 0x07FF0000);
     _CCAN->init_Filt(2, 0, 0x03F80000);
     _CCAN->init_Filt(3, 0, 0x02380000);
+    _CCAN->init_Filt(4, 0, 0x02730000);
     _CCAN->setMode(MCP_NORMAL);
     _c_enabled = true;
     Serial.println("Chassis CAN BUS OK");
@@ -30,6 +31,7 @@ void Car::init(byte v_pin, byte c_pin) {
     _VCAN->init_Mask(1, 0, 0x07FF0000);
     _VCAN->init_Filt(2, 0, 0x01020000);
     _VCAN->init_Filt(3, 0, 0x01030000);
+    _VCAN->init_Filt(4, 0, 0x02E10000);
     _VCAN->setMode(MCP_NORMAL);
     Serial.println("Vehicle CAN BUS OK");
   } else
@@ -75,8 +77,15 @@ void Car::_processLights(unsigned char len, unsigned char data[]) {
       brightness = map(v, 0x0B, 0xC8, 0, 0xFF);
       if (brightness < 34)
         brightness = 34;
-      brightness = map(brightness, 34, 0xFF, 5, 0x60);
+      brightness = map(brightness, 34, 0xFF, 0x05, 0x7F);
     }
+  }
+}
+
+void Car::openFrunk() {
+  if (_vehicleControlFrame[0] > 0 && !frunkOpen) {
+    _vehicleControlFrame[0] = _vehicleControlFrame[0] | 0x20;
+    _CCAN->sendMsgBuf(0x273, 8, _vehicleControlFrame);
   }
 }
 
@@ -116,12 +125,30 @@ void Car::_monitor(long unsigned int rxId, unsigned char len, unsigned char rxBu
 void Car::_processRightDoors(unsigned char len, unsigned char data[]) {
   doorOpen[0] = data[0] & 0x01;
   doorOpen[2] = data[0] & 0x10;
-  // printMessage(len, data, false);
+  doorHandlePull[0] = data[1] & 0x04;
+  //Serial.println();
+  //_printMessage(len, data, false);
 }
+
 void Car::_processLeftDoors(unsigned char len, unsigned char data[]) {
   doorOpen[1] = data[0] & 0x01;
   doorOpen[3] = data[0] & 0x10;
-  // printMessage(len, data, false);
+  doorHandlePull[1] = data[1] & 0x04;
+  //_printMessage(len, data, false);
+}
+
+
+void Car::_processVehicleStatus(unsigned char len, unsigned char data[]) {
+  if ((data[0] & 0x07) != 0)
+    return;
+  frunkOpen = ((data[0] >> 3) & 0x0F) != 2;
+}
+
+
+void Car::_processVehicleControl(unsigned char len, unsigned char data[]) {
+  //_printMessage(len, data, false);
+  for (byte i = 0; i < len; i++)
+    _vehicleControlFrame[i] = data[i];
 }
 
 void Car::process() {
@@ -131,7 +158,6 @@ void Car::process() {
 
   if (_v_enabled) {
     _VCAN->readMsgBuf(&rxId, &len, rxBuf);
-
     if (rxId == 0x3F5) {
       //processTurnSignals(len, rxBuf);
       _processLights(len, rxBuf);
@@ -145,6 +171,8 @@ void Car::process() {
       _processRightDoors(len, rxBuf);
     } else if (rxId == 0x102) {
       _processLeftDoors(len, rxBuf);
+    } else if (rxId == 0x2E1) {
+      _processVehicleStatus(len, rxBuf);
     }
   }
 
@@ -158,6 +186,10 @@ void Car::process() {
       //processHandsOn(len, rxBuf);
     } else if (rxId == 0x238) {
       //processHandsOn1(len, rxBuf);
+    } else if (rxId == 0x273) {
+      _processVehicleControl(len, rxBuf);
+    } else if (rxId == 0x229) {
+      //_processGearStalk(len, rxBuf);
     }
   }
 

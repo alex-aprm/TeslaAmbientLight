@@ -28,6 +28,10 @@ double targetColor[3][NUMPIXELS];
 Car car;
 Light light;
 
+bool doorHandlePull = false;
+unsigned long doorHandlePullMs;
+unsigned long frunkOpenMs;
+
 unsigned char role = 10;
 
 void setup() {
@@ -127,7 +131,28 @@ void loop() {
       lastUdp = millis();
       light.stateChanged = false;
     }
-/*
+
+
+    if (car.doorHandlePull[0] || car.doorHandlePull[1]) {
+      if (!doorHandlePull) {
+        doorHandlePull = true;
+        doorHandlePullMs = millis();
+        Serial.println("Handle pulled");
+      }
+    } else {
+      if (doorHandlePull) {
+        doorHandlePull = false;
+        Serial.println("Handle left");
+      }
+    }
+
+    if (doorHandlePull && (millis() - doorHandlePullMs > 10000) && frunkOpenMs < doorHandlePullMs) {
+      frunkOpenMs = millis();
+      Serial.println("Opening");
+      car.openFrunk();
+    }
+
+    /*
     byte doorNum = 0;
     brightness = light.brightness;
     state = light.doorLightState[doorNum];

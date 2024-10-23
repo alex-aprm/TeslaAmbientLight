@@ -5,24 +5,26 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-#include <SPI.h>
 
 //#include "Utils.cpp"
 #include "Car.h"
 #include "Light.h"
 
 #define LED_PIN 12
-#define NUMPIXELS 134
-
 const char* ssid = "ESP32";
 const char* password = "53EYMJTV";
+#define NUMPIXELS_FRONT 134
+#define NUMPIXELS_REAR 90
+#define NUMPIXELS_PILLAR 5
+#define NUMPIXELS NUMPIXELS_FRONT + NUMPIXELS_PILLAR + NUMPIXELS_REAR
+
 const char* udpAddress = "255.255.255.255";
 const int udpPort = 3333;
 WiFiUDP udp;
 
-Adafruit_NeoPixel strip(NUMPIXELS, LED_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip(max(NUMPIXELS_FRONT, NUMPIXELS_REAR), LED_PIN, NEO_GRB + NEO_KHZ800);
 double currentColor[3][NUMPIXELS];
-double oldColor[3][NUMPIXELS];
+uint32_t oldColor[NUMPIXELS];
 double targetColor[3][NUMPIXELS];
 
 Car car;
@@ -30,13 +32,15 @@ Light light;
 
 bool doorHandlePull = false;
 unsigned long doorHandlePullMs;
+byte doorHandlePullCount = 0;
 unsigned long frunkOpenMs;
+unsigned long unlockMs;
 
 unsigned char role = 10;
 
 void setup() {
   EEPROM.begin(8);
-  //EEPROM.write(0, byte(2));
+  //EEPROM.write(0, byte(0));
   //EEPROM.commit();
   role = byte(EEPROM.read(0));
 
@@ -45,24 +49,26 @@ void setup() {
   Serial.print("Role: ");
   Serial.println(role);
 
-  strip.begin();
-  strip.setBrightness(50);
-
   if (role == 0) {
     car.init(13, 5);
     WiFi.mode(WIFI_AP);
     WiFi.softAP(ssid, password);
+    Serial.println("WIFI started");
+    udp.begin(udpPort);
+    delay(50);
     //blinkSuccess(strip);
   } else {
-    delay(300);
+    strip.begin();
+    strip.setBrightness(50);
+    delay(100);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     while (WiFi.waitForConnectResult() != WL_CONNECTED) {
       Serial.println("Connection Failed! Rebooting...");
-      //blinkError(strip);
       delay(1000);
       ESP.restart();
     }
+
     //blinkSuccess(strip);
     udp.begin(udpPort);
   }
@@ -105,21 +111,27 @@ unsigned long lastUdp = 0;
 unsigned int udpInterval = 100;
 bool stateChanged = false;
 byte brightness;
+byte oldBrightness;
 byte state;
-unsigned long stateAge;
+byte lastState;
+unsigned long stateMs;
+unsigned int stateAge;
+int stateCnt;
 
 void loop() {
   ArduinoOTA.handle();
   if (role == 0) {
     car.process();
     light.processCarState(car);
-    if (light.allWait || light.allIdle) {
-      //delay(50);
+    unsigned long doorLightMinAge = light.doorLightAge[0];
+    for (byte i = 1; i < 4; i++)
+      if (light.doorLightAge[i] < doorLightMinAge)
+        doorLightMinAge = light.doorLightAge[i];
+    if ((light.allWait || light.allIdle) && doorLightMinAge > 15000) {
       udpInterval = 10000;
     } else
-      udpInterval = 100;
-
-    if (light.stateChanged || (millis() - lastUdp > udpInterval)) {
+      udpInterval = 30;
+    if (light.stateChanged || ((millis() - lastUdp) > udpInterval)) {
       udp.beginPacket(udpAddress, udpPort);
       udp.write(light.brightness);
       for (byte i = 0; i < 4; i++) {
@@ -130,63 +142,83 @@ void loop() {
         udp.write((byte)(light.doorLightAge[i] >> 24));
       }
       udp.endPacket();
+      udp.flush();
+
       lastUdp = millis();
       light.stateChanged = false;
     }
 
+    delay(10);
+    if (millis() - unlockMs > 30000) {
+      // car.openFrunk();
+      //unlockMs = millis();
+    } else {
+      //Serial.print("Unlock in ");
+      //Serial.println(30000 - (millis() - unlockMs));
+    }
 
     if (car.doorHandlePull[0] || car.doorHandlePull[1]) {
       if (!doorHandlePull) {
         doorHandlePull = true;
+        if (millis() - doorHandlePullMs > 1500)
+          doorHandlePullCount = 0;
         doorHandlePullMs = millis();
         Serial.println("Handle pulled");
       }
     } else {
       if (doorHandlePull) {
+        if (millis() - doorHandlePullMs > 500)
+          doorHandlePullCount++;
+        else
+          doorHandlePullCount = 0;
         doorHandlePull = false;
         Serial.println("Handle left");
       }
     }
 
-    if (doorHandlePull && (millis() - doorHandlePullMs > 10000) && frunkOpenMs < doorHandlePullMs) {
+    if (doorHandlePull && doorHandlePullCount == 2 && frunkOpenMs < doorHandlePullMs) {
       frunkOpenMs = millis();
+      doorHandlePullCount = 0;
       Serial.println("Opening");
+      //car.unlockRemote();
       car.openFrunk();
     }
 
-    /*
-    byte doorNum = 0;
-    brightness = light.brightness;
-    state = light.doorLightState[doorNum];
-    stateAge = light.doorLightAge[doorNum];
-*/
   } else {
     getStateFromMaster();
     strip.setBrightness(brightness);
     setColorByState();
     fadeColor();
-
     //strip.clear();
     bool changed = false;
-    for (int i = 0; i < NUMPIXELS; i++) {
-      if (oldColor[0][i] != currentColor[0][i] || oldColor[1][i] != currentColor[1][i] || oldColor[2][i] != currentColor[2][i]) {
+    byte firstPixel = 0;
+    byte lastPixel = NUMPIXELS_FRONT - 1;
+    if (role > 2) {
+      firstPixel = NUMPIXELS_FRONT + NUMPIXELS_PILLAR;
+      lastPixel = NUMPIXELS - 1;
+    }
+    for (int i = firstPixel; i <= lastPixel; i++) {
+      uint32_t color = strip.Color(round(currentColor[0][i]), round(currentColor[1][i]), round(currentColor[2][i]));
+      if (oldColor[i] != color) {
         changed = true;
-        oldColor[0][i] == currentColor[0][i];
-        oldColor[1][i] == currentColor[1][i];
-        oldColor[2][i] == currentColor[2][i];
+        oldColor[i] = color;
       }
     }
     if (changed) {
       strip.clear();
-      for (int i = 0; i < NUMPIXELS; i++) {
-        strip.setPixelColor(i, strip.Color(round(currentColor[0][i]), round(currentColor[1][i]), round(currentColor[2][i])));
+      for (int i = firstPixel; i <= lastPixel; i++) {
+        strip.setPixelColor(i - firstPixel, oldColor[i]);
       }
+    }
+
+    if (changed || oldBrightness != brightness) {
       strip.show();
     }
+    oldBrightness = brightness;
   }
 }
 
-long unsigned int lastUdpMs;
+unsigned long lastUdpMs;
 void getStateFromMaster() {
   //if (millis() - lastUdpMs > 10000)
   //  ESP.restart();
@@ -201,14 +233,32 @@ void getStateFromMaster() {
       brightness = packetBuffer[0];
       byte doorLen = 5;
       state = packetBuffer[1 + doorNum * doorLen];
-      stateAge = 0;
-      for (byte i = 0; i < 4; i++)
-        stateAge += packetBuffer[2 + i + doorNum * doorLen] * pow(255, i);
+      unsigned long age = 0;
+      for (int i = 0; i < 4; i++)
+        age += packetBuffer[2 + i + doorNum * doorLen] * pow(255, i);
+
+      unsigned long stateNewMs = millis() - age;
+      if (state == lastState) {
+        int d = stateNewMs > stateMs ? stateNewMs - stateMs : -(stateMs - stateNewMs);
+
+        stateMs = stateMs + round(d / ++stateCnt);
+      } else {
+        stateCnt = 1;
+        stateMs = stateNewMs;
+        lastState = state;
+      }
     }
   }
 }
 
+
 void setColorByState() {
+  stateAge = millis() - stateMs;
+  double max = 255;
+  if (brightness == 0)
+    max = 0;
+  else
+    max = map(brightness, 0x05, 0x7F, 0x60, 0xFF);
   if (state == DOOR_OPEN) {
     for (int i = 0; i < NUMPIXELS; i++) {
       setTargetColor(i, 255, 0, 0);
@@ -222,12 +272,39 @@ void setColorByState() {
       setCurrentColor(i, 20, 0, 0);
       setTargetColor(i, 20, 0, 0);
     }
-  } else if (state == IDLE_INIT) {
+  } else if (state == IDLE_INIT || state == IDLE || state == TURNING || state == TURNING_BLIND_SPOT || state == BLIND_SPOT) {
     for (int i = 0; i < NUMPIXELS; i++) {
-      setCurrentColor(i, 0, 0, 0);
-      setTargetColor(i, 0, 0, 40);
+      double r = max - map(i, 0, NUMPIXELS, 0, max);
+      double gMax = max *0.9;
+      if (gMax < 60)
+      gMax = 60; 
+      double g = map(i, 0, NUMPIXELS, 0, gMax);
+      setTargetColor(i, r, g, max);
+    }
+  }
+
+  if (state == IDLE_INIT) {
+        for (int i = 0; i < NUMPIXELS; i++) {
+      setTargetColor(i, 255 - map(i, 0, NUMPIXELS, 0, 255), map(i, 0, NUMPIXELS, 0, 255), 255);
     }
 
+    if (stateAge < 1000) {
+      int pos1 = map(stateAge, 0, 1000, 0, NUMPIXELS);
+
+      for (int i = pos1; i < NUMPIXELS; i++) {
+        setCurrentColor(i, 0, 0, 0);
+        setTargetColor(i, 0, 0, 0);
+      }
+
+      for (int i = 0; i < pos1; i++) {
+        // setCurrentColor(i, 0, 0, 0);
+      }
+
+      setCurrentColor(pos1, 255, 255, 255);
+      setTargetColor(pos1, 255, 255, 255);
+    }
+
+    /*
     unsigned int pos1 = round((stateAge) / 4.0);
     unsigned int pos2 = round((stateAge - 200) / 4.0);
     unsigned int fade = round((stateAge) / 6.0);
@@ -244,35 +321,49 @@ void setColorByState() {
         setTargetColor(i, 255, 255, 255);
         setCurrentColor(i, 255, 255, 255);
       }
-    }
+    }*/
+  }
 
-  } else if (state == IDLE || state == TURNING || state == TURNING_LIGHT) {
-    for (int i = 0; i < NUMPIXELS; i++) {
-      setTargetColor(i, 255, 0, 255);
+  int border = 38;
+  if (state == BLIND_SPOT) {
+    for (int i = border; i < 56; i++) {
+      setTargetColor(i, max, 0, 0);
     }
   }
 
-  if (state == TURNING) {
-    for (int i = 0; i < 20; i++) {
-      setTargetColor(i, 255, 128, 0);
-      setCurrentColor(i, 255, 128, 0);
+  if (state == TURNING_BLIND_SPOT) {
+    for (int i = border; i < NUMPIXELS_FRONT; i++) {
+      setTargetColor(i, max, 0, 0);
     }
   }
-  if (state == TURNING_LIGHT) {
-    for (int i = 20; i < 40; i++) {
-      setTargetColor(i, 255, 128, 0);
-      setCurrentColor(i, 255, 128, 0);
+
+  if (state == TURNING || state == TURNING_BLIND_SPOT) {
+    for (int i = 0; i < border; i++) {
+      setTargetColor(i, 0, 0, 0);
+      setCurrentColor(i, 0, 0, 0);
+    }
+    if (lround(floor((stateAge + 100) / 360)) % 2 == 0) {
+      double g = max / 5;
+      double r = max;
+      if (r < 200)
+        r = 200;
+      if (g < 60)
+        g = 60;
+      for (int i = 0; i < 37; i++) {
+        setTargetColor(i, r, g, 0);
+        setCurrentColor(i, r, g, 0);
+      }
     }
   }
 }
 
-void setTargetColor(byte i, double r, double g, double b) {
+void setTargetColor(int i, double r, double g, double b) {
   targetColor[0][i] = r;
   targetColor[1][i] = g;
   targetColor[2][i] = b;
 }
 
-void setCurrentColor(byte i, double r, double g, double b) {
+void setCurrentColor(int i, double r, double g, double b) {
   currentColor[0][i] = r;
   currentColor[1][i] = g;
   currentColor[2][i] = b;
@@ -288,7 +379,7 @@ void fadeColor() {
     left = 0;
   unsigned int step = millis() - colorTransitionLastMs;
   for (byte c = 0; c < 3; c++) {
-    for (byte i = 0; i < NUMPIXELS; i++) {
+    for (int i = 0; i < NUMPIXELS; i++) {
       if (currentColor[c][i] == targetColor[c][i])
         continue;
       if (left == 0) {

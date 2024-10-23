@@ -12,11 +12,13 @@ void Car::init(byte v_pin, byte c_pin) {
   if (_CCAN->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK) {
     _CCAN->init_Mask(0, 0, 0x07FF0000);
     _CCAN->init_Filt(0, 0, 0x03990000);
-    _CCAN->init_Filt(1, 0, 0x039D0000);
-    _CCAN->init_Mask(1, 0, 0x07FF0000);
+    _CCAN->init_Filt(1, 0, 0x02730000);
+    /*_CCAN->init_Mask(1, 0, 0x07FF0000);
     _CCAN->init_Filt(2, 0, 0x03F80000);
     _CCAN->init_Filt(3, 0, 0x02380000);
     _CCAN->init_Filt(4, 0, 0x02730000);
+    _CCAN->init_Filt(5, 0, 0x03990000);
+    _CCAN->init_Filt(6, 0, 0x02290000);*/
     _CCAN->setMode(MCP_NORMAL);
     _c_enabled = true;
     Serial.println("Chassis CAN BUS OK");
@@ -26,11 +28,11 @@ void Car::init(byte v_pin, byte c_pin) {
   if (_VCAN->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK) {
     _v_enabled = true;
     _VCAN->init_Mask(0, 0, 0x07FF0000);
-    _VCAN->init_Filt(0, 0, 0x03F50000);
-    _VCAN->init_Filt(1, 0, 0x03530000);
+    _VCAN->init_Filt(0, 0, 0x01020000);
+    _VCAN->init_Filt(1, 0, 0x01030000);
     _VCAN->init_Mask(1, 0, 0x07FF0000);
-    _VCAN->init_Filt(2, 0, 0x01020000);
-    _VCAN->init_Filt(3, 0, 0x01030000);
+    _VCAN->init_Filt(2, 0, 0x03F50000);
+    _VCAN->init_Filt(3, 0, 0x03530000);
     _VCAN->init_Filt(4, 0, 0x02E10000);
     _VCAN->setMode(MCP_NORMAL);
     Serial.println("Vehicle CAN BUS OK");
@@ -82,10 +84,33 @@ void Car::_processLights(unsigned char len, unsigned char data[]) {
   }
 }
 
+void Car::unlockRemote() {
+  if (_vehicleControlFrame[0] > 0) {
+    unsigned char snd[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    for (byte i = 0; i < 8; i++)
+      snd[i] = _vehicleControlFrame[i];
+    snd[2] = snd[2] | 0x6;
+    _CCAN->sendMsgBuf(0x273, 8, snd);
+  }
+}
+
+void Car::unlock() {
+  if (_vehicleControlFrame[0] > 0) {
+    unsigned char snd[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    for (byte i = 0; i < 8; i++)
+      snd[i] = _vehicleControlFrame[i];
+    snd[2] = snd[2] | 0x4;
+    _CCAN->sendMsgBuf(0x273, 8, snd);
+  }
+}
+
 void Car::openFrunk() {
   if (_vehicleControlFrame[0] > 0 && !frunkOpen) {
-    _vehicleControlFrame[0] = _vehicleControlFrame[0] | 0x20;
-    _CCAN->sendMsgBuf(0x273, 8, _vehicleControlFrame);
+    unsigned char snd[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    for (byte i = 0; i < 8; i++)
+      snd[i] = _vehicleControlFrame[i];
+    snd[0] = snd[0] | 0x20;
+    _CCAN->sendMsgBuf(0x273, 8, snd);
   }
 }
 
@@ -173,6 +198,19 @@ void Car::process() {
       _processLeftDoors(len, rxBuf);
     } else if (rxId == 0x2E1) {
       _processVehicleStatus(len, rxBuf);
+    } else if (rxId == 0x118) {
+      //Serial.print(" VC 118 ");
+      // _printMessage(len, rxBuf, false);
+    } else if (rxId == 0x229) {
+      //Serial.print(" VC 229 ");
+      //_printMessage(len, rxBuf, false);
+    } else if (rxId == 0x3DF) {
+      //Serial.print(" VC 3DF ");
+      // screen dark mode
+      //_printMessage(len, rxBuf, false);
+    } else if (rxId == 0x2D3) {
+      //Serial.print(" VC 2D3 ");
+      //_printMessage(len, rxBuf, false);
     }
   }
 
@@ -190,11 +228,38 @@ void Car::process() {
       _processVehicleControl(len, rxBuf);
     } else if (rxId == 0x229) {
       //_processGearStalk(len, rxBuf);
+    } else if (rxId == 0x118) {
+      //Serial.print(" CC 118 ");
+      //_printMessage(len, rxBuf, false);
+    } else if (rxId == 0x229) {
+      //Serial.print(" CC 229 ");
+      //_printMessage(len, rxBuf, false);
+    } else if (rxId == 0x339) {
+      //Serial.print(" CC 339 ");
+      // lock and keys data
+      //_printMessage(len, rxBuf, false);
     }
   }
 
-  /*  if (millis() - _doorChanged > 3000) {
-    _doorChanged = millis();
-    doorOpen[0] = !doorOpen[0];
-  }*/
+/*
+  displayOn = true;
+
+
+  if ((millis() / 7000) % 2 == 1) {
+    blindSpotRight = true;
+  } else {
+    blindSpotRight = false;
+  }
+
+  if ((millis() / 15000) % 2 == 1) {
+    if (millis() - _doorChanged > 500) {
+      _doorChanged = millis();
+      turningRight = !turningRight;
+      turningRightLight = !turningRight;
+    }
+  } else {
+    turningRight = false;
+    turningRightLight = false;
+  }
+  */
 }

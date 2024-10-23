@@ -7,10 +7,8 @@ enum DoorState : byte { WAIT,
                         IDLE_INIT,
                         IDLE,
                         TURNING,
-                        TURNING_LIGHT,
                         BLIND_SPOT,
-                        TURNING_BLIND_SPOT,
-                        TURNING_LIGHT_BLIND_SPOT };
+                        TURNING_BLIND_SPOT};
 class Light {
 public:
   Light();
@@ -26,4 +24,5 @@ public:
   bool stateChanged = false;
 private:
   void _changeDoorLightState(byte door, DoorState state);
+  void _changeDoorLightSubState(byte door, DoorState state);
 };

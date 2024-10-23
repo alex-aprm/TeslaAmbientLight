@@ -15,7 +15,7 @@ Serial.println(car.displayOn);
   */
 
   for (byte i = 0; i < 4; i++) {
-    if (doorLightState[i] == IDLE_INIT && now - doorLightMs[i] > 500)
+    if (doorLightState[i] == IDLE_INIT && now - doorLightMs[i] > 1000)
       _changeDoorLightState(i, IDLE);
   }
 
@@ -37,9 +37,6 @@ Serial.println(car.displayOn);
       if (doorLightState[i] == DOOR_WAIT)
         _changeDoorLightState(i, IDLE_INIT);
   }
-
-  for (byte i = 0; i < 4; i++)
-    doorLightAge[i] = millis() - doorLightMs[i];
 
   if (!car.displayOn) {
     for (byte i = 0; i < 4; i++)
@@ -64,32 +61,27 @@ Serial.println(car.displayOn);
       if (doorLightState[i] == IDLE)
         _changeDoorLightState(i, BLIND_SPOT);
       if (doorLightState[i] == TURNING)
-        _changeDoorLightState(i, TURNING_BLIND_SPOT);
-      if (doorLightState[i] == TURNING_LIGHT)
-        _changeDoorLightState(i, TURNING_LIGHT_BLIND_SPOT);
+        _changeDoorLightSubState(i, TURNING_BLIND_SPOT);
     }
     if (!blindSpot) {
       if (doorLightState[i] == BLIND_SPOT)
         _changeDoorLightState(i, IDLE);
       if (doorLightState[i] == TURNING_BLIND_SPOT)
-        _changeDoorLightState(i, TURNING);
-      if (doorLightState[i] == TURNING_LIGHT_BLIND_SPOT)
-        _changeDoorLightState(i, TURNING_LIGHT);
+        _changeDoorLightSubState(i, TURNING);
     }
-    if (turning && (doorLightState[i] == IDLE || doorLightState[i] == TURNING_LIGHT))
+    if ((turning || turningLight) && (doorLightState[i] == IDLE))
       _changeDoorLightState(i, TURNING);
-    if (turningLight && (doorLightState[i] == IDLE || doorLightState[i] == TURNING))
-      _changeDoorLightState(i, TURNING_LIGHT);
-    if (turning && (doorLightState[i] == BLIND_SPOT || doorLightState[i] == TURNING_LIGHT_BLIND_SPOT))
-      _changeDoorLightState(i, TURNING_BLIND_SPOT);
-    if (turningLight && (doorLightState[i] == IDLE || doorLightState[i] == TURNING_BLIND_SPOT))
-      _changeDoorLightState(i, TURNING_LIGHT_BLIND_SPOT);
-    if (!turningLight && !turning && (doorLightState[i] == TURNING_LIGHT || doorLightState[i] == TURNING))
+
+    if ((turning || turningLight) && (doorLightState[i] == BLIND_SPOT))
+      _changeDoorLightSubState(i, TURNING_BLIND_SPOT);
+      
+    if (!(turning || turningLight) && doorLightState[i] == TURNING)
       _changeDoorLightState(i, IDLE);
-    if (!turningLight && !turning && (doorLightState[i] == TURNING_LIGHT_BLIND_SPOT || doorLightState[i] == TURNING_BLIND_SPOT))
+
+    if (!(turning || turningLight) && (doorLightState[i] == TURNING_BLIND_SPOT))
       _changeDoorLightState(i, BLIND_SPOT);
   }
-
+ 
   allWait = true;
   for (byte i = 0; i < 4; i++)
     allWait = (doorLightState[i] == WAIT) && allWait;
@@ -104,11 +96,23 @@ Serial.println(car.displayOn);
 
   if (someDoorOpen && brightness < 100)
     brightness += 100;
+    
+  for (byte i = 0; i < 4; i++)
+    doorLightAge[i] = millis() - doorLightMs[i];
 }
 
 void Light::_changeDoorLightState(byte door, DoorState state) {
   doorLightState[door] = state;
   doorLightMs[door] = millis();
+  stateChanged = true;
+  Serial.print("Door ");
+  Serial.print(door);
+  Serial.print(" changed to ");
+  Serial.println(state);
+}
+
+void Light::_changeDoorLightSubState(byte door, DoorState state) {
+  doorLightState[door] = state;
   stateChanged = true;
   Serial.print("Door ");
   Serial.print(door);

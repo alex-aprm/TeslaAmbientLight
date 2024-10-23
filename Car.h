@@ -23,6 +23,8 @@ public:
   bool frunkOpen = false;
   bool doorHandlePull[2] = {false, false};
   void openFrunk();
+  void unlock();
+  void unlockRemote();
 private:
   bool _v_enabled = false;
   bool _c_enabled = false;

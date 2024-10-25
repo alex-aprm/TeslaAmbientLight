@@ -47,10 +47,10 @@ void Car::_processDisplayOn(unsigned char len, unsigned char data[]) {
 }
 
 void Car::_processAutopilot(unsigned char len, unsigned char data[]) {
-  blindSpotLeft = ((data[0] >> 4) && 0x03) > 0;
-  blindSpotRight = ((data[0] >> 6) && 0x03) > 0;
-  blindSpotLeftAlert = ((data[0] >> 4) && 0x03) > 1;
-  blindSpotRightAlert = ((data[0] >> 6) && 0x03) > 1;
+  blindSpotLeft = ((data[0] >> 4) & 0x03) > 0;
+  blindSpotRight = ((data[0] >> 6) & 0x03) > 0;
+  blindSpotLeftAlert = ((data[0] >> 4) & 0x03) > 1;
+  blindSpotRightAlert = ((data[0] >> 6) & 0x03) > 1;
   /*Serial.print(blindSpotLeft);
   Serial.print("     ");
   Serial.print(blindSpotRight);
@@ -79,7 +79,7 @@ void Car::_processLights(unsigned char len, unsigned char data[]) {
       brightness = map(v, 0x0B, 0xC8, 0, 0xFF);
       if (brightness < 34)
         brightness = 34;
-      brightness = map(brightness, 34, 0xFF, 0x05, 0x7F);
+      brightness = map(brightness, 34, 0xFF, 0x05, 0xC8);
     }
   }
 }

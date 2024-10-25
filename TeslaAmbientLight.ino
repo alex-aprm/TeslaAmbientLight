@@ -14,7 +14,7 @@
 const char* ssid = "ESP32";
 const char* password = "53EYMJTV";
 #define NUMPIXELS_FRONT 134
-#define NUMPIXELS_REAR 90
+#define NUMPIXELS_REAR 100
 #define NUMPIXELS_PILLAR 5
 #define NUMPIXELS NUMPIXELS_FRONT + NUMPIXELS_PILLAR + NUMPIXELS_REAR
 
@@ -191,8 +191,8 @@ void loop() {
     fadeColor();
     //strip.clear();
     bool changed = false;
-    byte firstPixel = 0;
-    byte lastPixel = NUMPIXELS_FRONT - 1;
+    int firstPixel = 0;
+    int lastPixel = NUMPIXELS_FRONT - 1;
     if (role > 2) {
       firstPixel = NUMPIXELS_FRONT + NUMPIXELS_PILLAR;
       lastPixel = NUMPIXELS - 1;
@@ -258,7 +258,7 @@ void setColorByState() {
   if (brightness == 0)
     max = 0;
   else
-    max = map(brightness, 0x05, 0x7F, 0x60, 0xFF);
+    max = map(brightness, 0x05, 0xC8, 0x60, 0xFF);
   if (state == DOOR_OPEN) {
     for (int i = 0; i < NUMPIXELS; i++) {
       setTargetColor(i, 255, 0, 0);
@@ -303,25 +303,6 @@ void setColorByState() {
       setCurrentColor(pos1, 255, 255, 255);
       setTargetColor(pos1, 255, 255, 255);
     }
-
-    /*
-    unsigned int pos1 = round((stateAge) / 4.0);
-    unsigned int pos2 = round((stateAge - 200) / 4.0);
-    unsigned int fade = round((stateAge) / 6.0);
-    if (fade > 255)
-      fade = 255;
-    for (int i = 0; i < NUMPIXELS; i++) {
-      if (pos2 < i && i < pos1) {
-        targetColor[0][i] = fade;
-        targetColor[2][i] = fade;
-        currentColor[0][i] = fade;
-        currentColor[2][i] = fade;
-      }
-      if (i == pos2) {
-        setTargetColor(i, 255, 255, 255);
-        setCurrentColor(i, 255, 255, 255);
-      }
-    }*/
   }
 
   int border = 38;

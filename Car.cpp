@@ -11,10 +11,10 @@ void Car::init(byte v_pin, byte c_pin) {
   _CCAN = new MCP_CAN(c_pin);
   if (_CCAN->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK) {
     _CCAN->init_Mask(0, 0, 0x07FF0000);
-    _CCAN->init_Filt(0, 0, 0x03990000);
-    _CCAN->init_Filt(1, 0, 0x02730000);
-    /*_CCAN->init_Mask(1, 0, 0x07FF0000);
-    _CCAN->init_Filt(2, 0, 0x03F80000);
+    _CCAN->init_Filt(0, 0, 0x02730000);
+    /*_CCAN->init_Filt(1, 0, 0x03990000);
+    _CCAN->init_Mask(1, 0, 0x07FF0000);
+    _CCAN->init_Filt(2, 0, 0x03FD0000);
     _CCAN->init_Filt(3, 0, 0x02380000);
     _CCAN->init_Filt(4, 0, 0x02730000);
     _CCAN->init_Filt(5, 0, 0x03990000);
@@ -32,8 +32,9 @@ void Car::init(byte v_pin, byte c_pin) {
     _VCAN->init_Filt(1, 0, 0x01030000);
     _VCAN->init_Mask(1, 0, 0x07FF0000);
     _VCAN->init_Filt(2, 0, 0x03F50000);
-    _VCAN->init_Filt(3, 0, 0x03530000);
+    _VCAN->init_Filt(3, 0, 0x03990000);
     _VCAN->init_Filt(4, 0, 0x02E10000);
+    // _VCAN->init_Filt(3, 0, 0x03530000);
     _VCAN->setMode(MCP_NORMAL);
     Serial.println("Vehicle CAN BUS OK");
   } else
@@ -114,6 +115,18 @@ void Car::openFrunk() {
   }
 }
 
+
+void Car::wakeup() {
+  if (_vehicleControlFrame[0] > 0 && !frunkOpen) {
+    unsigned char snd[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    for (byte i = 0; i < 8; i++)
+      snd[i] = _vehicleControlFrame[i];
+    snd[0] = snd[0] | 0x01;
+    _CCAN->sendMsgBuf(0x273, 8, snd);
+  }
+}
+
+
 void Car::_printMessage(unsigned char len, unsigned char data[], bool out) {
   char msgString[128];
   for (byte i = 0; i < len; i++) {
@@ -183,7 +196,10 @@ void Car::process() {
 
   if (_v_enabled) {
     _VCAN->readMsgBuf(&rxId, &len, rxBuf);
-    if (rxId == 0x3F5) {
+    if (rxId == 0x399) {
+      _printMessage(len, rxBuf, false);
+      _processAutopilot(len, rxBuf);
+    } else if (rxId == 0x3F5) {
       //processTurnSignals(len, rxBuf);
       _processLights(len, rxBuf);
     } else if (rxId == 0x229) {
@@ -191,7 +207,7 @@ void Car::process() {
     } else if (rxId == 0x7FF) {
       //processGTW(len, rxBuf);
     } else if (rxId == 0x353) {
-      _processDisplayOn(len, rxBuf);
+      // _processDisplayOn(len, rxBuf);
     } else if (rxId == 0x103) {
       _processRightDoors(len, rxBuf);
     } else if (rxId == 0x102) {
@@ -217,10 +233,12 @@ void Car::process() {
   if (_c_enabled) {
     _CCAN->readMsgBuf(&rxId, &len, rxBuf);  // Read data: len = data length, buf = data byte(s)
     if (rxId == 0x399) {
-      _processAutopilot(len, rxBuf);
+      //_printMessage(len, rxBuf, false);
+      //_processAutopilot(len, rxBuf);
     } else if (rxId == 0x39D) {
       //processBrake(len, rxBuf);
-    } else if (rxId == 0x3F8) {
+    } else if (rxId == 0x3FD) {
+      //_printMessage(len, rxBuf, false);
       //processHandsOn(len, rxBuf);
     } else if (rxId == 0x238) {
       //processHandsOn1(len, rxBuf);
@@ -239,27 +257,43 @@ void Car::process() {
       // lock and keys data
       //_printMessage(len, rxBuf, false);
     }
+
+
+    if (openFrunkWithDoor) {
+      if (doorHandlePull[0] || doorHandlePull[1]) {
+        if (!_doorHandlePull) {
+          _doorHandlePull = true;
+          if (millis() - _doorHandlePullMs > 1500)
+            _doorHandlePullCount = 0;
+          _doorHandlePullMs = millis();
+          Serial.println("Handle pulled");
+        }
+      } else {
+        if (_doorHandlePull) {
+          if (millis() - _doorHandlePullMs > 500)
+            _doorHandlePullCount++;
+          else
+            _doorHandlePullCount = 0;
+          _doorHandlePull = false;
+          Serial.println("Handle left");
+        }
+      }
+
+      if (_doorHandlePull && _doorHandlePullCount == 2 && _frunkOpenMs < _doorHandlePullMs) {
+        _frunkOpenMs = millis();
+        _doorHandlePullCount = 0;
+        Serial.println("Opening");
+        openFrunk();
+      }
+    }
   }
-
-/*
+  /*
   displayOn = true;
+  brightness = 0xC8;
 
-
-  if ((millis() / 7000) % 2 == 1) {
+  if ((millis() / 1000) % 2 == 1) {
     blindSpotRight = true;
   } else {
     blindSpotRight = false;
-  }
-
-  if ((millis() / 15000) % 2 == 1) {
-    if (millis() - _doorChanged > 500) {
-      _doorChanged = millis();
-      turningRight = !turningRight;
-      turningRightLight = !turningRight;
-    }
-  } else {
-    turningRight = false;
-    turningRightLight = false;
-  }
-  */
+  }*/
 }

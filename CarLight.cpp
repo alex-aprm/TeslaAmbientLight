@@ -1,18 +1,16 @@
-#ifndef LIGHT_H
-#define LIGHT_H
-#include "Arduino.h"
-#include "Light.h"
-#include "Car.h"
+#include <Arduino.h>
+#include "CarLight.h"
 
-Light::Light() {
+CarLight::CarLight() {
 }
 
-void Light::processCarState(Car &car) {
+void CarLight::init() {
+  _udp = new WiFiUDP();
+  _udp->begin(_udpPort);
+}
+
+void CarLight::processCarState(Car& car) {
   long now = millis();
-  /*
-Serial.print("Display ");
-Serial.println(car.displayOn);
-  */
 
   for (byte i = 0; i < 4; i++) {
     if (doorLightState[i] == IDLE_INIT && now - doorLightMs[i] > 1000)
@@ -49,11 +47,11 @@ Serial.println(car.displayOn);
   }
 
   for (byte i = 0; i < 2; i++) {
-    bool blindSpot = car.blindSpotRight;
+    bool blindSpot = car.blindSpotRight || car.blindSpotRightAlert;
     bool turning = car.turningRight;
     bool turningLight = car.turningRightLight;
     if (i == 1) {
-      blindSpot = car.blindSpotLeft;
+      blindSpot = car.blindSpotLeft || car.blindSpotLeftAlert;
       turning = car.turningLeft;
       turningLight = car.turningLeftLight;
     }
@@ -74,14 +72,14 @@ Serial.println(car.displayOn);
 
     if ((turning || turningLight) && (doorLightState[i] == BLIND_SPOT))
       _changeDoorLightSubState(i, TURNING_BLIND_SPOT);
-      
+
     if (!(turning || turningLight) && doorLightState[i] == TURNING)
       _changeDoorLightState(i, IDLE);
 
     if (!(turning || turningLight) && (doorLightState[i] == TURNING_BLIND_SPOT))
       _changeDoorLightState(i, BLIND_SPOT);
   }
- 
+
   allWait = true;
   for (byte i = 0; i < 4; i++)
     allWait = (doorLightState[i] == WAIT) && allWait;
@@ -96,12 +94,81 @@ Serial.println(car.displayOn);
 
   if (someDoorOpen && brightness < 100)
     brightness += 100;
-    
+
   for (byte i = 0; i < 4; i++)
     doorLightAge[i] = millis() - doorLightMs[i];
 }
 
-void Light::_changeDoorLightState(byte door, DoorState state) {
+void CarLight::sendLightState() {
+  unsigned long doorLightMinAge = doorLightAge[0];
+  for (byte i = 1; i < 4; i++)
+    if (doorLightAge[i] < doorLightMinAge)
+      doorLightMinAge = doorLightAge[i];
+  if ((allWait || allIdle) && doorLightMinAge > 15000) {
+    _udpInterval = 10000;
+  } else
+    _udpInterval = 30;
+  if (stateChanged || ((millis() - _lastUdp) > _udpInterval)) {
+    _udp->beginPacket(_udpAddress, _udpPort);
+    _udp->write(brightness);
+    for (byte i = 0; i < 4; i++) {
+      _udp->write(doorLightState[i]);
+      _udp->write((byte)doorLightAge[i]);
+      _udp->write((byte)(doorLightAge[i] >> 8));
+      _udp->write((byte)(doorLightAge[i] >> 16));
+      _udp->write((byte)(doorLightAge[i] >> 24));
+    }
+    _udp->endPacket();
+    _udp->flush();
+
+    _lastUdp = millis();
+    stateChanged = false;
+  }
+}
+
+
+void CarLight::receiveLightState() {
+  //if (millis() - lastUdpMs > 10000)
+  //  ESP.restart();
+
+  //byte doorNum = role - 1;
+  char packetBuffer[255];
+  int packetSize = _udp->parsePacket();
+  if (packetSize) {
+    int len = _udp->read(packetBuffer, 255);
+    if (len > 0) {
+      _lastUdp = millis();
+      brightness = packetBuffer[0];
+      byte doorLen = 5;
+
+      for (byte doorNum = 0; doorNum < 4; doorNum++) {
+        byte lastState = doorLightState[doorNum];
+        unsigned long stateMs = doorLightMs[doorNum];
+
+        byte state = packetBuffer[1 + doorNum * doorLen];
+        unsigned long age = 0;
+        for (byte i = 0; i < 4; i++)
+          age += packetBuffer[2 + i + doorNum * doorLen] * pow(255, i);
+
+        unsigned long stateNewMs = millis() - age;
+        if (state == lastState) {
+          int d = stateNewMs > stateMs ? stateNewMs - stateMs : -(stateMs - stateNewMs);
+
+          stateMs = stateMs + round(d / ++_stateCnt);
+        } else {
+          _stateCnt = 1;
+          stateMs = stateNewMs;
+          lastState = state;
+        }
+        doorLightState[doorNum] = (DoorState)lastState;
+        doorLightMs[doorNum] = stateMs;
+        doorLightAge[doorNum] = age;
+      }
+    }
+  }
+}
+
+void CarLight::_changeDoorLightState(byte door, DoorState state) {
   doorLightState[door] = state;
   doorLightMs[door] = millis();
   stateChanged = true;
@@ -111,7 +178,7 @@ void Light::_changeDoorLightState(byte door, DoorState state) {
   Serial.println(state);
 }
 
-void Light::_changeDoorLightSubState(byte door, DoorState state) {
+void CarLight::_changeDoorLightSubState(byte door, DoorState state) {
   doorLightState[door] = state;
   stateChanged = true;
   Serial.print("Door ");
@@ -119,5 +186,3 @@ void Light::_changeDoorLightSubState(byte door, DoorState state) {
   Serial.print(" changed to ");
   Serial.println(state);
 }
-
-#endif

@@ -14,6 +14,7 @@ public:
   bool turningLeftLight = false;
   bool turningRight = false;
   bool turningRightLight = false;
+  bool openFrunkWithDoor = false;
 
   bool blindSpotLeft = false;
   bool blindSpotRight = false;
@@ -25,11 +26,16 @@ public:
   void openFrunk();
   void unlock();
   void unlockRemote();
+  void wakeup();
 private:
   bool _v_enabled = false;
   bool _c_enabled = false;
   MCP_CAN* _VCAN;
   MCP_CAN* _CCAN;
+  bool _doorHandlePull = false;
+  unsigned long _doorHandlePullMs;
+  byte _doorHandlePullCount = 0;
+  unsigned long _frunkOpenMs;
   unsigned long _doorChanged; 
   unsigned char _vehicleControlFrame[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   void _processRightDoors(unsigned char len, unsigned char data[]);

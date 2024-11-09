@@ -7,7 +7,7 @@ DoorLight::DoorLight() {
 }
 
 void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin) {
-  
+
   _doorNum = doorNum;
   if (doorNum > 1) {
     _firstPixel = numPixelsFront + numPixelsPillar;
@@ -17,10 +17,10 @@ void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin) {
     _setTargetColor(i, 50, 50, 50);
     _setCurrentColor(i, 50, 50, 50);
   }
-  /*
+
   pinMode(pocketLedPin, OUTPUT);
   digitalWrite(pocketLedPin, HIGH);
-*/
+
   _strip = new Adafruit_NeoPixel(max(numPixelsFront, numPixelsRear), ledPin, NEO_GRB + NEO_KHZ800);
 
   _strip->begin();
@@ -33,9 +33,8 @@ void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin) {
 
 void DoorLight::setColorByCarState(CarLight& carLight) {
   DoorState state = carLight.doorLightState[_doorNum];
-  unsigned long stateMs = carLight.doorLightMs[_doorNum];
-  int brightness = carLight.brightness;
-  unsigned long stateAge = millis() - stateMs;
+  byte brightness = carLight.brightness;
+  unsigned long stateAge = millis() - carLight.doorLightMs[_doorNum];
   double max = 255;
   if (brightness == 0)
     max = 0;
@@ -125,7 +124,12 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
 
   _fadeColor();
 
-  _strip->setBrightness(carLight.brightness);
+  if (brightness > _stripBrightness)
+    _stripBrightness++;
+  if (brightness < _stripBrightness)
+    _stripBrightness--;
+
+  _strip->setBrightness(_stripBrightness);
 
   bool changed = false;
   for (int i = _firstPixel; i <= _lastPixel; i++) {
@@ -135,17 +139,22 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
       _oldColor[i] = color;
     }
   }
-  if (changed || brightness != carLight.brightness)
-    _pushColorToStrip();
+  if (changed || _stripBrightness != _oldBrightness) {
 
-  brightness = carLight.brightness;
+    _pushColorToStrip();
+  }
+  _oldBrightness = _stripBrightness;
 }
 
 void DoorLight::_setTargetColor(int i, double r, double g, double b) {
-  _targetColor[0][i] = r;
-  _targetColor[1][i] = g;
-  _targetColor[2][i] = b;
-  _targetAge = millis();
+  uint32_t color = Adafruit_NeoPixel::Color(round(r), round(g), round(b));
+  if (_oldTargetColor[i] != color) {
+    _oldTargetColor[i] = color;
+    _targetColor[0][i] = r;
+    _targetColor[1][i] = g;
+    _targetColor[2][i] = b;
+    _targetStateMs = millis();
+  }
 }
 
 void DoorLight::_setCurrentColor(int i, double r, double g, double b) {
@@ -155,9 +164,9 @@ void DoorLight::_setCurrentColor(int i, double r, double g, double b) {
 }
 
 void DoorLight::_fadeColor() {
-  unsigned long start = millis() - _targetAge;
   unsigned int transition = 300;
-  unsigned long end = start + transition;
+  unsigned long end = _targetStateMs + transition;
+
   int left = end - _colorTransitionLastMs;
   if (left < 0)
     left = 0;

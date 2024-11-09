@@ -10,7 +10,12 @@
 const char* ssid = "ESP32";
 const char* password = "53EYMJTV";
 const int ledPin = 12;
+
+#ifdef CONFIG_IDF_TARGET_ESP32S3 
+const int pocketLedPin = 10;
+#else
 const int pocketLedPin = 14;
+#endif
 const int vCanPin = 13;
 const int cCanPin = 5;
 

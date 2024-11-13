@@ -12,8 +12,8 @@ void Car::init(byte v_pin, byte c_pin) {
   if (_CCAN->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK) {
     _CCAN->init_Mask(0, 0, 0x07FF0000);
     _CCAN->init_Filt(0, 0, 0x02730000);
-    /*_CCAN->init_Filt(1, 0, 0x03990000);
-    _CCAN->init_Mask(1, 0, 0x07FF0000);
+    _CCAN->init_Filt(1, 0, 0x03990000);
+    /*_CCAN->init_Mask(1, 0, 0x07FF0000);
     _CCAN->init_Filt(2, 0, 0x03FD0000);
     _CCAN->init_Filt(3, 0, 0x02380000);
     _CCAN->init_Filt(4, 0, 0x02730000);
@@ -28,13 +28,12 @@ void Car::init(byte v_pin, byte c_pin) {
   if (_VCAN->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK) {
     _v_enabled = true;
     _VCAN->init_Mask(0, 0, 0x07FF0000);
-    _VCAN->init_Filt(0, 0, 0x01020000);
-    _VCAN->init_Filt(1, 0, 0x01030000);
+    _VCAN->init_Filt(0, 0, 0x03F50000);
     _VCAN->init_Mask(1, 0, 0x07FF0000);
-    _VCAN->init_Filt(2, 0, 0x03F50000);
-    _VCAN->init_Filt(3, 0, 0x03990000);
-    _VCAN->init_Filt(4, 0, 0x02E10000);
-    // _VCAN->init_Filt(3, 0, 0x03530000);
+    _VCAN->init_Filt(1, 0, 0x01020000);
+    _VCAN->init_Filt(2, 0, 0x01030000);
+    _VCAN->init_Filt(3, 0, 0x02E10000);
+    _VCAN->init_Filt(4, 0, 0x01180000);
     _VCAN->setMode(MCP_NORMAL);
     Serial.println("Vehicle CAN BUS OK");
   } else
@@ -80,7 +79,7 @@ void Car::_processLights(unsigned char len, unsigned char data[]) {
       brightness = map(v, 0x0B, 0xC8, 0, 0xFF);
       if (brightness < 34)
         brightness = 34;
-      brightness = map(brightness, 34, 0xFF, 0x05, 0xC8);
+      brightness = map(brightness, 34, 0xFF, 0x05, 0xFF);
     }
   }
 }
@@ -175,6 +174,9 @@ void Car::_processLeftDoors(unsigned char len, unsigned char data[]) {
   //_printMessage(len, data, false);
 }
 
+void Car::_processGear(unsigned char len, unsigned char data[]) {
+  gear = (Gear)((data[2] >> 5) & 0x07);
+}
 
 void Car::_processVehicleStatus(unsigned char len, unsigned char data[]) {
   if ((data[0] & 0x07) != 0)
@@ -190,17 +192,12 @@ void Car::_processVehicleControl(unsigned char len, unsigned char data[]) {
 }
 
 void Car::process() {
-  long unsigned int rxId;
-  unsigned char len = 0;
-  unsigned char rxBuf[8];
-
-  if (_v_enabled) {
+  if (_v_enabled && _VCAN->checkReceive()) {
+    long unsigned int rxId;
+    unsigned char len = 0;
+    unsigned char rxBuf[8];
     _VCAN->readMsgBuf(&rxId, &len, rxBuf);
-    if (rxId == 0x399) {
-      _printMessage(len, rxBuf, false);
-      _processAutopilot(len, rxBuf);
-    } else if (rxId == 0x3F5) {
-      //processTurnSignals(len, rxBuf);
+    if (rxId == 0x3F5) {
       _processLights(len, rxBuf);
     } else if (rxId == 0x229) {
       //processGearStalk(len, rxBuf);
@@ -215,8 +212,11 @@ void Car::process() {
     } else if (rxId == 0x2E1) {
       _processVehicleStatus(len, rxBuf);
     } else if (rxId == 0x118) {
-      //Serial.print(" VC 118 ");
-      // _printMessage(len, rxBuf, false);
+      /*Serial.print("V ");
+      Serial.print(rxId);
+      Serial.print(" ");
+      _printMessage(len, rxBuf, false);*/
+       _processGear(len, rxBuf);
     } else if (rxId == 0x229) {
       //Serial.print(" VC 229 ");
       //_printMessage(len, rxBuf, false);
@@ -230,11 +230,14 @@ void Car::process() {
     }
   }
 
-  if (_c_enabled) {
+  if (_c_enabled && _CCAN->checkReceive()) {
+    long unsigned int rxId;
+    unsigned char len = 0;
+    unsigned char rxBuf[8];
     _CCAN->readMsgBuf(&rxId, &len, rxBuf);  // Read data: len = data length, buf = data byte(s)
+
     if (rxId == 0x399) {
-      //_printMessage(len, rxBuf, false);
-      //_processAutopilot(len, rxBuf);
+      _processAutopilot(len, rxBuf);
     } else if (rxId == 0x39D) {
       //processBrake(len, rxBuf);
     } else if (rxId == 0x3FD) {
@@ -257,43 +260,45 @@ void Car::process() {
       // lock and keys data
       //_printMessage(len, rxBuf, false);
     }
+  }
 
 
-    if (openFrunkWithDoor) {
-      if (doorHandlePull[0] || doorHandlePull[1]) {
-        if (!_doorHandlePull) {
-          _doorHandlePull = true;
-          if (millis() - _doorHandlePullMs > 1500)
-            _doorHandlePullCount = 0;
-          _doorHandlePullMs = millis();
-          Serial.println("Handle pulled");
-        }
-      } else {
-        if (_doorHandlePull) {
-          if (millis() - _doorHandlePullMs > 500)
-            _doorHandlePullCount++;
-          else
-            _doorHandlePullCount = 0;
-          _doorHandlePull = false;
-          Serial.println("Handle left");
-        }
+  if (openFrunkWithDoor) {
+    if (doorHandlePull[0] || doorHandlePull[1]) {
+      if (!_doorHandlePull) {
+        _doorHandlePull = true;
+        if (millis() - _doorHandlePullMs > 1500)
+          _doorHandlePullCount = 0;
+        _doorHandlePullMs = millis();
+        Serial.println("Handle pulled");
       }
-
-      if (_doorHandlePull && _doorHandlePullCount == 2 && _frunkOpenMs < _doorHandlePullMs) {
-        _frunkOpenMs = millis();
-        _doorHandlePullCount = 0;
-        Serial.println("Opening");
-        openFrunk();
+    } else {
+      if (_doorHandlePull) {
+        if (millis() - _doorHandlePullMs > 500)
+          _doorHandlePullCount++;
+        else
+          _doorHandlePullCount = 0;
+        _doorHandlePull = false;
+        Serial.println("Handle left");
       }
     }
-  }
-  /*
-  displayOn = true;
-  brightness = 0xC8;
 
-  if ((millis() / 1000) % 2 == 1) {
-    blindSpotRight = true;
+    if (_doorHandlePull && _doorHandlePullCount == 2 && _frunkOpenMs < _doorHandlePullMs) {
+      _frunkOpenMs = millis();
+      _doorHandlePullCount = 0;
+      Serial.println("Opening");
+      openFrunk();
+    }
+  }
+  
+/*
+  if ((millis() / 10000) % 2 == 1) {
+   blindSpotRight = false;
+    blindSpotLeft = false;
   } else {
-    blindSpotRight = false;
-  }*/
+     blindSpotRight = true;
+        blindSpotLeft = true;
+  }
+  */
+  
 }

@@ -92,8 +92,8 @@ void CarLight::processCarState(Car& car) {
 
   stateChanged = stateChanged || (oldBrightness != brightness);
 
-  if (someDoorOpen && brightness < 100)
-    brightness += 100;
+  if ((someDoorOpen || car.gear == GEAR_PARK) && brightness < 0xC8)
+    brightness = 0xC8;
 
   for (byte i = 0; i < 4; i++)
     doorLightAge[i] = millis() - doorLightMs[i];
@@ -120,7 +120,6 @@ void CarLight::sendLightState() {
     }
     _udp->endPacket();
     _udp->flush();
-
     _lastUdp = millis();
     stateChanged = false;
   }

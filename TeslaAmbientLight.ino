@@ -6,18 +6,26 @@
 #include "Car.h"
 #include "CarLight.h"
 #include "DoorLight.h"
+#include "FootLight.h"
 
 const char* ssid = "ESP32";
 const char* password = "53EYMJTV";
 const int ledPin = 12;
 
-#ifdef CONFIG_IDF_TARGET_ESP32S3 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
 const int pocketLedPin = 10;
+const int mirrorPin = 11;
 #else
 const int pocketLedPin = 14;
+const int mirrorPin = 15;
 #endif
-const int vCanPin = 13;
-const int cCanPin = 5;
+
+const int leftFootwellPin = 16;
+const int rightFootwellPin = 17;
+
+const int vCanPin = 5;
+const int cCanPin = 13;
+const bool externalWifi = false;
 
 unsigned char role = DOOR_MASTER;  // DOOR_FRONT_RIGHT, DOOR_FRON_LEFT, DOOR_REAR_RIGHT, DOOR_REAR_LEFT
 const bool saveRoleToEEPROM = false;
@@ -26,7 +34,8 @@ const bool readRoleFromEEPROM = true;
 Car car;
 CarLight carLight;
 DoorLight doorLight;
-
+FootLight leftFootLight;
+FootLight rightFootLight;
 
 void setup() {
   car.openFrunkWithDoor = true;
@@ -46,13 +55,25 @@ void setup() {
 
   if (role == 0) {
     car.init(vCanPin, cCanPin);
+    leftFootLight.init(1, leftFootwellPin);
 
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(ssid, password);
-    Serial.println("WIFI started");
+    if (externalWifi) {
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(ssid, password);
+      while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+        Serial.println("Connection Failed! Rebooting...");
+        delay(1000);
+        ESP.restart();
+      }
+      Serial.println("Connected");
+    } else {
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP(ssid, password, 1, 0, 10, false);
+      Serial.println("WIFI started");
+    }
   } else {
 
-    doorLight.init(role - 1, ledPin, pocketLedPin);
+    doorLight.init(role - 1, ledPin, pocketLedPin, mirrorPin);
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -97,10 +118,13 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
+  //delay(100);
+  //return;
   if (role == 0) {
     car.process();
     carLight.processCarState(car);
     carLight.sendLightState();
+    leftFootLight.setColorByCarState(carLight);
   } else {
     carLight.receiveLightState();
     doorLight.setColorByCarState(carLight);

@@ -39,7 +39,7 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
     max = 0;
   else {
     max = map(_brightness, 0x05, 0xFF, 0x60, 0xFF);
-    _brightness = map(_brightness, 0x05, 0xFF, 0x05, 0x70);
+    _brightness = map(_brightness, 0x05, 0xFF, 0x05, 0x30);
   }
 
   if (state == DOOR_OPEN) {

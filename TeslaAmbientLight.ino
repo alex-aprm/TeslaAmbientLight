@@ -8,8 +8,6 @@
 #include "DoorLight.h"
 #include "FootLight.h"
 
-const char* ssid = "ESP32";
-const char* password = "53EYMJTV";
 const int ledPin = 12;
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -25,6 +23,9 @@ const int rightFootwellPin = 17;
 
 const int vCanPin = 5;
 const int cCanPin = 13;
+const char* ssid = "T3LIGHT";
+const char* password = "123456";
+const char* passwordOTA = "123456";
 const bool externalWifi = false;
 
 unsigned char role = DOOR_MASTER;  // DOOR_FRONT_RIGHT, DOOR_FRON_LEFT, DOOR_REAR_RIGHT, DOOR_REAR_LEFT
@@ -113,6 +114,7 @@ void setup() {
     });
 
 
+  ArduinoOTA.setPassword(passwordOTA);
   ArduinoOTA.begin();
 }
 

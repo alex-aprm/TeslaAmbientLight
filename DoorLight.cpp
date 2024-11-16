@@ -4,13 +4,14 @@
 DoorLight::DoorLight() {
 }
 
-void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin, byte mirrorPin) {
+void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin) {
+  _numPixels = numPixels;
   _doorNum = doorNum;
   if (doorNum > 1) {
     _firstPixel = numPixelsFront + numPixelsPillar;
     _lastPixel = numPixels - 1;
   }
-  for (int i = 0; i < numPixels; i++) {
+  for (int i = 0; i < _numPixels; i++) {
     _setTargetColor(i, 50, 50, 50);
     _setCurrentColor(i, 50, 50, 50);
   }
@@ -19,14 +20,12 @@ void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin, byte mirrorPi
   digitalWrite(pocketLedPin, HIGH);
 
   _strip = new Adafruit_NeoPixel(max(numPixelsFront, numPixelsRear), ledPin, NEO_GRB + NEO_KHZ800);
-  _stripMirror = new Adafruit_NeoPixel(20, mirrorPin, NEO_GRB + NEO_KHZ800);
 
   _strip->begin();
-  _stripMirror->begin();
   _strip->setBrightness(30);
   _strip->clear();
   for (int i = _firstPixel; i <= numPixelsFront; i++)
-    _strip->setPixelColor(i - _firstPixel, Adafruit_NeoPixel::Color(50, 50, 50));
+    _strip->setPixelColor(i - _firstPixel, Adafruit_NeoPixel::Color(0, 0, 0));
   _strip->show();
 }
 
@@ -43,28 +42,28 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
   }
 
   if (state == DOOR_OPEN) {
-    for (int i = 0; i < numPixels; i++) {
+    for (int i = 0; i < _numPixels; i++) {
       _setTargetColor(i, 255, 0, 0);
     }
   } else if (state == WAIT) {
-    for (int i = 0; i < numPixels; i++) {
+    for (int i = 0; i < _numPixels; i++) {
       _setTargetColor(i, 0, 0, 0);
     }
   } else if (state == DOOR_WAIT) {
-    for (int i = 0; i < numPixels; i++) {
+    for (int i = 0; i < _numPixels; i++) {
       _setCurrentColor(i, 20, 0, 0);
       _setTargetColor(i, 20, 0, 0);
     }
   } else if (state == IDLE_INIT || state == IDLE || state == TURNING || state == TURNING_BLIND_SPOT || state == BLIND_SPOT) {
-    for (int i = 0; i < numPixels; i++) {
+    for (int i = 0; i < _numPixels; i++) {
       if (_brightness < 0x10) {
         _setTargetColor(i, 0, 0, max);
       } else {
-        double r = max - map(i, 0, numPixels, 0, max);
+        double r = max - map(i, 0, _numPixels, 0, max);
         double gMax = max * 0.9;
         if (gMax < 60)
           gMax = 60;
-        double g = map(i, 0, numPixels, 0, gMax);
+        double g = map(i, 0, _numPixels, 0, gMax);
         _setTargetColor(i, r, g, max);
       }
     }
@@ -72,18 +71,18 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
 
   if (state == IDLE_INIT) {
     _stripBrightness = _brightness;
-    for (int i = 0; i < numPixels; i++) {
-      _setTargetColor(i, 255 - map(i, 0, numPixels, 0, 255), map(i, 0, numPixels, 0, 255), 255);
+    for (int i = 0; i < _numPixels; i++) {
+      _setTargetColor(i, 255 - map(i, 0, _numPixels, 0, 255), map(i, 0, _numPixels, 0, 255), 255);
     }
     if (stateAge < 100) {
-      for (int i = 0; i < numPixels; i++) {
+      for (int i = 0; i < _numPixels; i++) {
         _setCurrentColor(i, 0, 0, 0);
         _setTargetColor(i, 0, 0, 0);
       }
     } else if (stateAge < 1000) {
-      int pos1 = map(stateAge, 0, 1000, 0, numPixels);
+      int pos1 = map(stateAge, 0, 1000, 0, _numPixels);
 
-      for (int i = pos1; i < numPixels; i++) {
+      for (int i = pos1; i < _numPixels; i++) {
         _setCurrentColor(i, 0, 0, 0);
         _updateTargetColor(i, 0, 0, 0);
       }
@@ -102,14 +101,6 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
 
 
   int border = 38;
-  /*
-  if (state == BLIND_SPOT && _doorNum == 1) {
-    for (int i = border; i < 56; i++) {
-      _setTargetColor(i, max, 0, 0);
-    }
-    // _setTargetColor(_firstPixelMirror + 4, r, g, 0);
-  }
-  */
 
   if (state == TURNING_BLIND_SPOT) {
     for (int i = border; i < numPixelsFront; i++) {
@@ -130,28 +121,9 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
     }
   }
 
-
-  for (int i = _firstPixelMirror; i < _lastPixelMirror; i++) {
-    _setTargetColor(i, 0, 0, 0);
-    // _setCurrentColor(i, 0, 0, 0);
-  }
-  if (state == TURNING_BLIND_SPOT) {
-
-    for (int i = _firstPixelMirror; i < _lastPixelMirror - 5; i++) {
-      _setTargetColor(i, max, 0, 0);
-      //_setCurrentColor(i, r, g, 0);
-    }
-  } else if (state == BLIND_SPOT) {
-    for (int i = _firstPixelMirror + 4; i < _lastPixelMirror - 5; i++) {
-      _setTargetColor(i, 255, 80, 0);
-      //_setCurrentColor(i, r, g, 0);
-    }
-  }
-
   _fadeColor();
   _fadeBrightness();
   _pushColorToStrip();
-  _pushColorToMirrorStrip();
   _oldBrightness = _stripBrightness;
 }
 
@@ -195,7 +167,7 @@ void DoorLight::_fadeColor() {
     left = 0;
 
   int step = millis() - _colorTransitionLastMs;
-  for (int i = 0; i < numPixelsTotal; i++) {
+  for (int i = 0; i < _numPixels; i++) {
     for (byte c = 0; c < 3; c++) {
       if (_currentColor[c][i] == _targetColor[c][i])
         continue;
@@ -230,24 +202,5 @@ void DoorLight::_pushColorToStrip() {
     for (int i = _firstPixel; i <= _lastPixel; i++)
       _strip->setPixelColor(i - _firstPixel, _oldColor[i]);
     _strip->show();
-  }
-}
-
-void DoorLight::_pushColorToMirrorStrip() {
-  bool changed = false;
-  _stripMirror->setBrightness(_stripBrightness);
-  for (int i = _firstPixelMirror; i <= _lastPixelMirror; i++) {
-    uint32_t color = Adafruit_NeoPixel::Color(round(_currentColor[0][i]), round(_currentColor[1][i]), round(_currentColor[2][i]));
-    if (_oldColor[i] != color) {
-      changed = true;
-      _oldColor[i] = color;
-    }
-  }
-  if (changed || _oldBrightness != _stripBrightness) {
-    _stripMirror->clear();
-    for (int i = _firstPixelMirror; i <= _lastPixelMirror; i++)
-      _stripMirror->setPixelColor(i - _firstPixelMirror, _oldColor[i]);
-
-    _stripMirror->show();
   }
 }

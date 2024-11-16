@@ -7,6 +7,7 @@
 #include "CarLight.h"
 #include "DoorLight.h"
 #include "FootLight.h"
+#include "MirrorLight.h"
 
 const int ledPin = 12;
 
@@ -18,8 +19,11 @@ const int pocketLedPin = 14;
 const int mirrorPin = 15;
 #endif
 
-const int leftFootwellPin = 16;
-const int rightFootwellPin = 17;
+const int leftFootwellPin = 26;
+const int rightFootwellPin = 27;
+
+const int leftFootwellHLPin = 32;
+const int rightFootwellHLPin = 33;
 
 const int vCanPin = 5;
 const int cCanPin = 13;
@@ -34,9 +38,12 @@ const bool readRoleFromEEPROM = true;
 
 Car car;
 CarLight carLight;
-DoorLight doorLight;
+
 FootLight leftFootLight;
 FootLight rightFootLight;
+
+DoorLight doorLight;
+MirrorLight mirrorLight;
 
 void setup() {
   car.openFrunkWithDoor = true;
@@ -56,8 +63,8 @@ void setup() {
 
   if (role == 0) {
     car.init(vCanPin, cCanPin);
-    leftFootLight.init(1, leftFootwellPin);
-
+    leftFootLight.init(1, leftFootwellPin, leftFootwellHLPin, 0);
+    rightFootLight.init(2, rightFootwellPin, rightFootwellHLPin, 1);
     if (externalWifi) {
       WiFi.mode(WIFI_STA);
       WiFi.begin(ssid, password);
@@ -74,8 +81,8 @@ void setup() {
     }
   } else {
 
-    doorLight.init(role - 1, ledPin, pocketLedPin, mirrorPin);
-
+    doorLight.init(role - 1, ledPin, pocketLedPin);
+    mirrorLight.init(role - 1, mirrorPin);
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -92,10 +99,8 @@ void setup() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH)
         type = "sketch";
-      else  // U_SPIFFS
+      else  
         type = "filesystem";
-
-      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
       Serial.println("Start updating " + type);
     })
     .onEnd([]() {
@@ -112,24 +117,22 @@ void setup() {
       else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
       else if (error == OTA_END_ERROR) Serial.println("End Failed");
     });
-
-
   ArduinoOTA.setPassword(passwordOTA);
   ArduinoOTA.begin();
 }
 
 void loop() {
   ArduinoOTA.handle();
-  //delay(100);
-  //return;
   if (role == 0) {
     car.process();
     carLight.processCarState(car);
     carLight.sendLightState();
     leftFootLight.setColorByCarState(carLight);
+    rightFootLight.setColorByCarState(carLight);
   } else {
     carLight.receiveLightState();
     doorLight.setColorByCarState(carLight);
+    mirrorLight.setColorByCarState(carLight);
   }
   delay(10);
 }

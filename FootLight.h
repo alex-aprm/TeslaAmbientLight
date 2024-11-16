@@ -10,11 +10,10 @@ const int numPixelsFoot = 3;
 class FootLight : public DoorLight {
 public:
   FootLight();
-
-  void init(byte doorNum, byte ledPin);
+  void init(byte doorNum, byte ledPin, byte ledHLPin, byte ledChannel);
   void setColorByCarState(CarLight& carLight);
 private:
-
-  unsigned int _transition = 200;
+  byte _ledChannel;
+  byte _ledHLPin;
 };
 #endif

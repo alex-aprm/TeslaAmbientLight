@@ -12,14 +12,22 @@ enum DoorRole : byte {
   DOOR_REAR_LEFT
 };
 
-enum DoorState : byte { WAIT,
-                        DOOR_OPEN,
-                        DOOR_WAIT,
-                        IDLE_INIT,
-                        IDLE,
-                        TURNING,
-                        BLIND_SPOT,
-                        TURNING_BLIND_SPOT };
+enum DoorState : byte {
+  WAIT,
+  DOOR_OPEN,
+  DOOR_WAIT,
+  IDLE_INIT,
+  IDLE,
+  TURNING,
+  BLIND_SPOT,
+  TURNING_BLIND_SPOT
+};
+
+enum FootwellState : byte {
+  FOOTWELL_OFF,
+  FOOTWELL_ON
+};
+
 class CarLight {
 public:
   CarLight();
@@ -27,6 +35,7 @@ public:
   void processCarState(Car& car);
   void sendLightState();
   void receiveLightState();
+  FootwellState footwellLightState = FOOTWELL_ON;
   DoorState doorLightState[4] = { WAIT, WAIT, WAIT, WAIT };
   unsigned long doorLightMs[4] = { 0, 0, 0, 0 };
   unsigned long doorLightAge[4] = { 0, 0, 0, 0 };
@@ -44,6 +53,7 @@ private:
   int _stateCnt;
   void _changeDoorLightState(byte door, DoorState state);
   void _changeDoorLightSubState(byte door, DoorState state);
+  Gear _oldGear;
 };
 
 #endif

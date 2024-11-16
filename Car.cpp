@@ -176,6 +176,8 @@ void Car::_processLeftDoors(unsigned char len, unsigned char data[]) {
 
 void Car::_processGear(unsigned char len, unsigned char data[]) {
   gear = (Gear)((data[2] >> 5) & 0x07);
+  if (gear == 0x07)
+    gear = (Gear)GEAR_UNKNOWN;
 }
 
 void Car::_processVehicleStatus(unsigned char len, unsigned char data[]) {
@@ -290,8 +292,10 @@ void Car::process() {
       openFrunk();
     }
   }
-  
-/*
+ /*
+  brightness = 0xFF;
+  displayOn = true;
+
   if ((millis() / 10000) % 2 == 1) {
    blindSpotRight = false;
     blindSpotLeft = false;
@@ -299,6 +303,14 @@ void Car::process() {
      blindSpotRight = true;
         blindSpotLeft = true;
   }
+  
+  
+  if ((millis() / 5000) % 2 == 1) {
+   gear = GEAR_PARK;
+  } else {
+   gear = GEAR_DRIVE;
+  }
   */
+  
   
 }

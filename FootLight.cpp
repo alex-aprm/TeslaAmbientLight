@@ -4,26 +4,35 @@
 FootLight::FootLight() {
 }
 
-void FootLight::init(byte doorNum, byte ledPin) {
-  _strip = new Adafruit_NeoPixel(numPixelsFoot, ledPin, NEO_GRB + NEO_KHZ800);
+void FootLight::init(byte doorNum, byte ledPin, byte ledHLPin, byte ledChannel) {
+  _firstPixel = 0;
+  _lastPixel = numPixelsFoot - 1;
+  _transition = 1000;
+  _numPixels = numPixelsFoot;
+  _ledHLPin = ledHLPin;
+  _ledChannel = ledChannel;
+  _strip = new Adafruit_NeoPixel(numPixels, ledPin, NEO_GRB + NEO_KHZ800);
   _strip->begin();
+
+  const int freq = 15000;
+  const int resolution = 8;
+  ledcSetup(_ledChannel, freq, resolution);
+  ledcAttachPin(_ledHLPin, _ledChannel);
 }
 
 void FootLight::setColorByCarState(CarLight& carLight) {
-  _brightness = carLight.brightness;
-  double max = 255;
-  if (_brightness < 0x05)
-    max = 0;
-  else {
-    max = map(_brightness, 0x05, 0xFF, 0x60, 0xFF);
+  _stripBrightness = 0x50;
+  if (carLight.footwellLightState == FOOTWELL_ON) {
+    for (int i = 0; i < numPixelsFoot; i++) {
+      _setTargetColor(i, 255, 180, 180);
+    }
+  } else {
+    for (int i = 0; i < numPixelsFoot; i++) {
+      _setTargetColor(i, 0, 0, 0);
+    }
   }
-  for (int i = 0; i < numPixelsFoot; i++) {
-    _setTargetColor(i, 255, 180, 180);
-  }
-
 
   _fadeColor();
-  _fadeBrightness();
+  ledcWrite(_ledChannel, _currentColor[0][0]);
   _pushColorToStrip();
-  _oldBrightness = _stripBrightness;
 }

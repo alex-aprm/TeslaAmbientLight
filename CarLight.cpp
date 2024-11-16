@@ -11,6 +11,13 @@ void CarLight::init() {
 
 void CarLight::processCarState(Car& car) {
   long now = millis();
+  if (_oldGear != car.gear) {
+    if (_oldGear <= GEAR_PARK && car.gear >= GEAR_PARK)
+      footwellLightState = FOOTWELL_OFF;
+    if (_oldGear > GEAR_PARK && car.gear <= GEAR_PARK)
+      footwellLightState = FOOTWELL_ON;
+    _oldGear = car.gear;
+  }
 
   for (byte i = 0; i < 4; i++) {
     if (doorLightState[i] == IDLE_INIT && now - doorLightMs[i] > 1000)
@@ -92,7 +99,7 @@ void CarLight::processCarState(Car& car) {
 
   stateChanged = stateChanged || (oldBrightness != brightness);
 
-  if ((someDoorOpen || car.gear == GEAR_PARK) && brightness < 0xC8)
+  if ((someDoorOpen || car.gear < GEAR_PARK) && brightness < 0xC8)
     brightness = 0xC8;
 
   for (byte i = 0; i < 4; i++)

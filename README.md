@@ -63,13 +63,13 @@ Do this at your own risk.**
 
 Pretty standard SPI wiring. Chip Select wires should correspond to `Car.init(13, 5)` call
 
-![image](images/master-wiring.png)
+![image](images/master-wiring-1.png)
 
 ## Door module
 
 Test LED strip wires before connecting. Mine had black wire for 5V and red for GND. RIP, LED strip.
 
-![image](images/door-wiring.png)
+![image](images/door-wiring-1.png)
 
 ## Car connectors and pins
 

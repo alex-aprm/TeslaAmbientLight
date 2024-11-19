@@ -93,7 +93,7 @@ Anyway, I don't think it's a good idea to put additional load, so I've taken the
 ![image](images/connector-door1.png)
 ![image](images/connector-door2.png)
 ### Back doors
-![image](images/connector-door3.png)
+![image](images/connector-door3-1.png)
 ![image](images/connector-door4.png)
 
 # Used resources

@@ -20,7 +20,10 @@ enum DoorState : byte {
   IDLE,
   TURNING,
   BLIND_SPOT,
-  TURNING_BLIND_SPOT
+  TURNING_BLIND_SPOT,
+  HANDS_ON_REQUIRED,
+  HANDS_ON_WARNING,
+  HANDS_ON_ALERT
 };
 
 enum FootwellState : byte {

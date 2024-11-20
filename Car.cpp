@@ -51,14 +51,15 @@ void Car::_processAutopilot(unsigned char len, unsigned char data[]) {
   blindSpotRight = ((data[0] >> 6) & 0x03) > 0;
   blindSpotLeftAlert = ((data[0] >> 4) & 0x03) > 1;
   blindSpotRightAlert = ((data[0] >> 6) & 0x03) > 1;
-  /*Serial.print(blindSpotLeft);
-  Serial.print("     ");
-  Serial.print(blindSpotRight);
-  Serial.print("     ");
-  Serial.print(blindSpotLeftAlert);
-  Serial.print("     ");
-  Serial.print(blindSpotRightAlert);
-  Serial.println();*/
+
+  byte ap = (data[0] & 0x0F);
+  autosteerOn = ap == 3 || ap == 4 || ap == 5;
+
+  byte ho = ((data[5] >> 2) & 0x0F);
+  handsOn = ho == 1;
+  handsOnRequired = ho > 0;
+  handsOnWarning = ho > 2;
+  handsOnAlert = ho > 3;
 }
 
 void Car::_processLights(unsigned char len, unsigned char data[]) {

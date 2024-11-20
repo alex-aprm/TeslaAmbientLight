@@ -54,7 +54,7 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
       _setCurrentColor(i, 20, 0, 0);
       _setTargetColor(i, 20, 0, 0);
     }
-  } else if (state == IDLE_INIT || state == IDLE || state == TURNING || state == TURNING_BLIND_SPOT || state == BLIND_SPOT) {
+  } else if (state == IDLE_INIT || state == IDLE || state == TURNING || state == TURNING_BLIND_SPOT || state == BLIND_SPOT || state == HANDS_ON_REQUIRED || state == HANDS_ON_WARNING || state == HANDS_ON_ALERT) {
     for (int i = 0; i < _numPixels; i++) {
       if (_brightness < 0x10) {
         _setTargetColor(i, 0, 0, max);
@@ -87,8 +87,10 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
         _updateTargetColor(i, 0, 0, 0);
       }
 
-      _setCurrentColor(pos1, 255, 255, 255);
-      _updateTargetColor(pos1, 255, 255, 255);
+      for (int i = pos1; i < _numPixels && i < pos1 + 5; i++) {
+        _setCurrentColor(i, 255, 255, 255);
+        _updateTargetColor(i, 255, 255, 255);
+      }
     }
   }
 

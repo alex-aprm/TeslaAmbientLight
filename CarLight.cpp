@@ -26,6 +26,22 @@ void CarLight::processCarState(Car& car) {
 
   someDoorOpen = false;
   for (byte i = 0; i < 4; i++) {
+
+    if (car.autosteerOn && car.handsOnRequired && !car.handsOn) {
+      if (doorLightState[i] == IDLE)
+        _changeDoorLightState(i, HANDS_ON_REQUIRED);
+      if (car.handsOnAlert) {
+        if (doorLightState[i] != HANDS_ON_ALERT)
+          _changeDoorLightState(i, HANDS_ON_ALERT);
+      } else if (car.handsOnWarning && doorLightState[i] != HANDS_ON_WARNING)
+        _changeDoorLightState(i, HANDS_ON_WARNING);
+    }
+
+    if (doorLightState[i] == HANDS_ON_REQUIRED || doorLightState[i] == HANDS_ON_WARNING || doorLightState[i] == HANDS_ON_ALERT) {
+      if (!car.autosteerOn || (car.handsOnRequired && car.handsOn))
+        _changeDoorLightState(i, IDLE);
+    }
+
     someDoorOpen = car.doorOpen[i] || someDoorOpen;
     if (car.doorOpen[i] && doorLightState[i] != DOOR_OPEN)
       _changeDoorLightState(i, DOOR_OPEN);

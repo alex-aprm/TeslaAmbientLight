@@ -23,11 +23,15 @@ public:
   bool turningRight = false;
   bool turningRightLight = false;
   bool openFrunkWithDoor = false;
-
   bool blindSpotLeft = false;
   bool blindSpotRight = false;
   bool blindSpotLeftAlert = false;
   bool blindSpotRightAlert = false;
+  bool autosteerOn = false;
+  bool handsOn = true;
+  bool handsOnRequired = false;
+  bool handsOnWarning = false;
+  bool handsOnAlert = false;
   Gear gear;
   bool doorOpen[4] = { false, false, false, false };
   bool frunkOpen = false;

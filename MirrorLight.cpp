@@ -26,36 +26,30 @@ void MirrorLight::setColorByCarState(CarLight& carLight) {
     _setTargetColor(i, 0, 0, 0);
   }
   if (state == TURNING_BLIND_SPOT) {
-    for (int i = 0; i < _numPixels - 5; i++) {
+    for (int i = 1; i < _numPixels - 1; i++) {
       _setTargetColor(i, 255, 0, 0);
     }
   } else if (state == BLIND_SPOT) {
-    for (int i = 4; i < _numPixels - 5; i++) {
+
+    for (int i = 6; i < _numPixels - 5; i++) {
       _setTargetColor(i, 255, 80, 0);
     }
-  }
-
-  if (state == HANDS_ON_REQUIRED) {
-    for (int i = 4; i < _numPixels - 5; i++) {
+  } else if (state == HANDS_ON_REQUIRED) {
+    for (int i = 6; i < _numPixels - 5; i++) {
       _setTargetColor(i, 0, 0, 64);
     }
-  }
-  if (state == HANDS_ON_WARNING) {
-    for (int i = 0; i < _numPixels - 5; i++) {
+  } else if (state == HANDS_ON_WARNING) {
+    for (int i = 1; i < _numPixels - 1; i++) {
       _setTargetColor(i, 0, 0, 128);
     }
-  }
-  if (state == HANDS_ON_ALERT) {
-    for (int i = 0; i < _numPixels - 5; i++) {
-      _setTargetColor(i, 0, 0, 0);
-    }
-    if (lround(floor((stateAge + 100) / 360)) % 2 == 0) {
-      for (int i = 0; i < _numPixels - 5; i++) {
+  } else if (state == HANDS_ON_ALERT) {
+    for (int i = 1; i < _numPixels - 1; i++) {
+      if (lround(floor((stateAge + 100) / 360)) % 2 == 0)
         _setTargetColor(i, 0, 0, 255);
-      }
+      else
+        _setTargetColor(i, 0, 0, 0);
     }
   }
-
   _fadeColor();
   _fadeBrightness();
   _pushColorToStrip();

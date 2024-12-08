@@ -37,7 +37,7 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
   if (_brightness < 0x05)
     max = 0;
   else {
-    max = map(_brightness, 0x05, 0xFF, 0x60, 0xFF);
+    max = map(_brightness, 0x05, 0xFF, 0x40, 0xFF);
     _brightness = map(_brightness, 0x05, 0xFF, 0x05, 0x30);
   }
 
@@ -51,18 +51,17 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
     }
   } else if (state == DOOR_WAIT) {
     for (int i = 0; i < _numPixels; i++) {
-      _setCurrentColor(i, 20, 0, 0);
       _setTargetColor(i, 20, 0, 0);
     }
-  } else if (state == IDLE_INIT || state == IDLE || state == TURNING || state == TURNING_BLIND_SPOT || state == BLIND_SPOT || state == HANDS_ON_REQUIRED || state == HANDS_ON_WARNING || state == HANDS_ON_ALERT) {
+  } else if (state == IDLE_INIT || state == IDLE || state == TURNING_BLIND_SPOT || state == BLIND_SPOT || state == HANDS_ON_REQUIRED || state == HANDS_ON_WARNING || state == HANDS_ON_ALERT) {
     for (int i = 0; i < _numPixels; i++) {
-      if (_brightness < 0x10) {
+      if (_brightness < 0x0A) {
         _setTargetColor(i, 0, 0, max);
       } else {
         double r = max - map(i, 0, _numPixels, 0, max);
         double gMax = max * 0.9;
-        if (gMax < 60)
-          gMax = 60;
+        if (gMax < 40)
+          gMax = 40;
         double g = map(i, 0, _numPixels, 0, gMax);
         _setTargetColor(i, r, g, max);
       }
@@ -102,11 +101,12 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
     g = 60;
 
 
-  int border = 38;
+  int border = 35;
 
   if (state == TURNING_BLIND_SPOT) {
     for (int i = border; i < numPixelsFront; i++) {
       _setTargetColor(i, max, 0, 0);
+      _setCurrentColor(i, max, 0, 0);
     }
   }
 
@@ -115,8 +115,13 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
       _setTargetColor(i, 0, 0, 0);
       _setCurrentColor(i, 0, 0, 0);
     }
+    for (int i = border; i < numPixelsFront; i++) {
+       if (_brightness < 0x0A) 
+         _setCurrentColor(i, 0, 0, 0);
+      _setTargetColor(i, 0, 0, 0);
+    }
     if (lround(floor((stateAge + 100) / 360)) % 2 == 0) {
-      for (int i = 0; i < 37; i++) {
+      for (int i = 0; i < border; i++) {
         _setTargetColor(i, r, g, 0);
         _setCurrentColor(i, r, g, 0);
       }

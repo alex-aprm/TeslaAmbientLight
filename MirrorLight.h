@@ -5,7 +5,7 @@
 #include "CarLight.h"
 #include "DoorLight.h"
 
-const int numPixelsMirror = 11;
+const int numPixelsMirror = 15;
 
 class MirrorLight : public DoorLight {
 public:

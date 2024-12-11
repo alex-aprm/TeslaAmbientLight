@@ -75,16 +75,27 @@ void setup() {
       }
       Serial.println("Connected");
     } else {
+      IPAddress local_IP(192, 168, 4, 10);
+      IPAddress subnet(255, 255, 255, 0);
+      IPAddress gateway(192, 168, 4, 1);
+      if (!WiFi.config(local_IP, gateway, subnet)) {
+        Serial.println("Configuration Failed!");
+      }
       WiFi.mode(WIFI_AP);
       WiFi.softAP(ssid, password, 1, 0, 10, false);
       Serial.println("WIFI started");
     }
   } else {
-
+    IPAddress local_IP(192, 168, 4, 10 + role);
+    IPAddress subnet(255, 255, 255, 0);
+    IPAddress gateway(192, 168, 4, 1);
+    if (!WiFi.config(local_IP, gateway, subnet)) {
+      Serial.println("Configuration Failed!");
+    }
     doorLight.init(role - 1, ledPin, pocketLedPin);
     mirrorLight.init(role - 1, mirrorPin);
     WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
+    WiFi.begin(ssid, password, 1);
     while (WiFi.waitForConnectResult() != WL_CONNECTED) {
       Serial.println("Connection Failed! Rebooting...");
       delay(1000);
@@ -99,7 +110,7 @@ void setup() {
       String type;
       if (ArduinoOTA.getCommand() == U_FLASH)
         type = "sketch";
-      else  
+      else
         type = "filesystem";
       Serial.println("Start updating " + type);
     })

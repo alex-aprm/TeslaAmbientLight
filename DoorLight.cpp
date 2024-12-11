@@ -103,22 +103,22 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
 
   int border = 35;
 
-  if (state == TURNING_BLIND_SPOT) {
-    for (int i = border; i < numPixelsFront; i++) {
-      _setTargetColor(i, max, 0, 0);
-      _setCurrentColor(i, max, 0, 0);
-    }
-  }
-
   if (state == TURNING || state == TURNING_BLIND_SPOT) {
     for (int i = 0; i < border; i++) {
       _setTargetColor(i, 0, 0, 0);
       _setCurrentColor(i, 0, 0, 0);
     }
     for (int i = border; i < numPixelsFront; i++) {
-       if (_brightness < 0x0A) 
-         _setCurrentColor(i, 0, 0, 0);
+      if (_brightness < 0x0A)
+        _setCurrentColor(i, 0, 0, 0);
       _setTargetColor(i, 0, 0, 0);
+    }
+
+    if (state == TURNING_BLIND_SPOT) {
+      for (int i = border; i < numPixelsFront; i++) {
+        _setTargetColor(i, max, 0, 0);
+        _setCurrentColor(i, max, 0, 0);
+      }
     }
     if (lround(floor((stateAge + 100) / 360)) % 2 == 0) {
       for (int i = 0; i < border; i++) {

@@ -12,11 +12,14 @@ void CarLight::init() {
 void CarLight::processCarState(Car& car) {
   long now = millis();
   if (_oldGear != car.gear) {
-    if (_oldGear <= GEAR_PARK && car.gear >= GEAR_PARK)
+    if (_oldGear <= GEAR_PARK && car.gear >= GEAR_PARK) {
       footwellLightState = FOOTWELL_OFF;
-    if (_oldGear > GEAR_PARK && car.gear <= GEAR_PARK)
+       _oldGear = car.gear;
+    }
+    if (_oldGear > GEAR_PARK && car.gear <= GEAR_PARK && car.displayOn) {
       footwellLightState = FOOTWELL_ON;
-    _oldGear = car.gear;
+       _oldGear = car.gear;
+    }
   }
 
   for (byte i = 0; i < 4; i++) {

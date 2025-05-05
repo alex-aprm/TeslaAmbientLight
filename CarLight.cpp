@@ -16,10 +16,15 @@ void CarLight::processCarState(Car& car) {
       footwellLightState = FOOTWELL_OFF;
        _oldGear = car.gear;
     }
-    if (_oldGear > GEAR_PARK && car.gear <= GEAR_PARK && car.displayOn) {
+    if (_oldGear > GEAR_PARK && car.gear <= GEAR_PARK) {
       footwellLightState = FOOTWELL_ON;
        _oldGear = car.gear;
     }
+  }
+
+  if (!car.displayOn) {
+    footwellLightState = FOOTWELL_OFF;
+    _oldGear = GEAR_NEUTRAL;
   }
 
   for (byte i = 0; i < 4; i++) {

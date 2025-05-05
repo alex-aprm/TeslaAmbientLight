@@ -9,34 +9,51 @@
 #include "FootLight.h"
 #include "MirrorLight.h"
 
+#define AUTOSPORT_ESP32 false
+
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 const int pocketLedPin = 10;
 const int mirrorPin = 11;
 const int ledPin = 12;
-#else 
+#else
 #ifdef CONFIG_IDF_TARGET_ESP32C3
 const int pocketLedPin = 2;
 const int mirrorPin = 4;
 const int ledPin = 3;
-#else 
+#else
 const int pocketLedPin = 14;
 const int mirrorPin = 15;
 const int ledPin = 12;
 #endif
 #endif
 
-const int leftFootwellPin = 26;
-const int rightFootwellPin = 27;
 
-const int leftFootwellHLPin = 32;
-const int rightFootwellHLPin = 33;
 
+#ifdef AUTOSPORT_ESP32
+const int vCanPin = 0;
+const int cCanPin = 10;
+const bool asBoard = true;
+const int vCanRxPin = 6;
+const int vCanTxPin = 7;
+const int leftFootwellPin = 4;
+const int rightFootwellPin = 5;
+const int leftFootwellHLPin = 8;
+const int rightFootwellHLPin = 9;
+#else
+const bool asBoard = false;
 const int vCanPin = 5;
 const int cCanPin = 13;
 const char* ssid = "T3LIGHT";
 const char* password = "123456";
 const char* passwordOTA = "123456";
 const bool externalWifi = false;
+const int vCanRxPin = 0;
+const int vCanTxPin = 0;
+const int leftFootwellPin = 26;
+const int rightFootwellPin = 27;
+const int leftFootwellHLPin = 32;
+const int rightFootwellHLPin = 33;
+#endif
 
 unsigned char role = DOOR_MASTER;  // DOOR_FRONT_RIGHT, DOOR_FRON_LEFT, DOOR_REAR_RIGHT, DOOR_REAR_LEFT
 const bool saveRoleToEEPROM = false;
@@ -68,9 +85,14 @@ void setup() {
   Serial.println(role);
 
   if (role == 0) {
-    car.init(vCanPin, cCanPin);
-    leftFootLight.init(1, leftFootwellPin, leftFootwellHLPin, 0);
-    rightFootLight.init(2, rightFootwellPin, rightFootwellHLPin, 1);
+    if (asBoard)
+      car.initAS(cCanPin, vCanRxPin, vCanTxPin);
+    else
+      car.init(vCanPin, cCanPin);
+    leftFootLight.initHL(1, leftFootwellHLPin);
+    rightFootLight.initHL(2, rightFootwellHLPin);
+    //leftFootLight.initRGB(1, leftFootwellPin);
+    //rightFootLight.initRGB(2, rightFootwellPin);
     if (externalWifi) {
       WiFi.mode(WIFI_STA);
       WiFi.begin(ssid, password);
@@ -87,6 +109,7 @@ void setup() {
       if (!WiFi.config(local_IP, gateway, subnet)) {
         Serial.println("Configuration Failed!");
       }
+    
       WiFi.mode(WIFI_AP);
       WiFi.softAP(ssid, password, 1, 0, 10, false);
       Serial.println("WIFI started");
@@ -112,32 +135,34 @@ void setup() {
 
   carLight.init();
   ArduinoOTA.onStart([]() {
-      String type;
-      if (ArduinoOTA.getCommand() == U_FLASH)
-        type = "sketch";
-      else
-        type = "filesystem";
-      Serial.println("Start updating " + type);
-    });
-    ArduinoOTA.onEnd([]() {
-      Serial.println("\nEnd");
-    });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    });
-    ArduinoOTA.onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
-    });
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else
+      type = "filesystem";
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
   ArduinoOTA.setPassword(passwordOTA);
   ArduinoOTA.begin();
 }
 
 void loop() {
+  if (!car.displayOn)
+   delay(50);
   ArduinoOTA.handle();
   if (role == 0) {
     car.process();
@@ -150,5 +175,4 @@ void loop() {
     doorLight.setColorByCarState(carLight);
     mirrorLight.setColorByCarState(carLight);
   }
-  delay(10);
 }

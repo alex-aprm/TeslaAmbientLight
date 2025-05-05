@@ -4,16 +4,19 @@
 #include <Adafruit_NeoPixel.h>
 #include "CarLight.h"
 #include "DoorLight.h"
+#include "driver/ledc.h"
 
 const int numPixelsFoot = 3;
 
 class FootLight : public DoorLight {
 public:
   FootLight();
-  void init(byte doorNum, byte ledPin, byte ledHLPin, byte ledChannel);
+  void initRGB(byte doorNum, byte ledPin);
+  void initHL(byte doorNum, byte ledHLPin);
   void setColorByCarState(CarLight& carLight);
 private:
-  byte _ledChannel;
+  ledc_channel_t _ledChannel;
+  ledc_timer_t _ledTimer;
   byte _ledHLPin;
 };
 #endif

@@ -2,6 +2,7 @@
 #define CAR_H
 #include <mcp_can.h>
 #include <Arduino.h>
+#include "driver/twai.h"
 
 enum Gear : byte {
   GEAR_UNKNOWN,
@@ -15,6 +16,7 @@ class Car {
 public:
   Car();
   void init(byte v_pin, byte c_pin);
+  void initAS(byte c_pin, byte v_rx_pin, byte v_tx_pin);
   void process();
   byte brightness = 10;
   bool displayOn = false;
@@ -43,6 +45,7 @@ public:
 private:
   bool _v_enabled = false;
   bool _c_enabled = false;
+  bool _v_twai_enabled = false;
   MCP_CAN* _VCAN;
   MCP_CAN* _CCAN;
   bool _doorHandlePull = false;
@@ -61,5 +64,6 @@ private:
   void _processGear(unsigned char len, unsigned char data[]);
   void _monitor(long unsigned int rxId, unsigned char len, unsigned char rxBuf[]);
   void _printMessage(unsigned char len, unsigned char data[], bool out);
+  void _handle_twai_rx_message(twai_message_t &message);
 };
 #endif

@@ -1,10 +1,57 @@
 #include "Arduino.h"
 #include "Car.h"
+#include <SPI.h>
 #include <mcp_can.h>
-
+#include "driver/twai.h"
 
 Car::Car() {
 }
+
+void Car::initAS(byte c_pin, byte v_rx_pin, byte v_tx_pin) {
+  _CCAN = new MCP_CAN(c_pin);
+  if (_CCAN->begin(MCP_ANY, CAN_500KBPS, MCP_16MHZ) == CAN_OK) {
+    _CCAN->init_Mask(0, 0, 0x07FF0000);
+    _CCAN->init_Filt(0, 0, 0x02730000);
+    _CCAN->init_Filt(1, 0, 0x03990000);
+    _CCAN->setMode(MCP_NORMAL);
+    _c_enabled = true;
+    Serial.println("Chassis CAN BUS OK");
+  } else
+    Serial.println("Error Initializing Cassis CAN bus...");
+
+  // Initialize configuration structures using macro initializers
+  twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)v_tx_pin, (gpio_num_t)v_rx_pin, TWAI_MODE_NORMAL);
+  twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();  //Look in the api-reference for other speed sets.
+  twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+  // Install TWAI driver
+  if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
+    Serial.println("Driver installed");
+  } else {
+    Serial.println("Failed to install driver");
+    return;
+  }
+
+  // Start TWAI driver
+  if (twai_start() == ESP_OK) {
+    Serial.println("Driver started");
+  } else {
+    Serial.println("Failed to start driver");
+    return;
+  }
+
+  // Reconfigure alerts to detect frame receive, Bus-Off error and RX queue full states
+  uint32_t alerts_to_enable = TWAI_ALERT_RX_DATA | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_ERROR | TWAI_ALERT_RX_QUEUE_FULL | TWAI_ALERT_TX_IDLE | TWAI_ALERT_TX_SUCCESS | TWAI_ALERT_TX_FAILED;
+  if (twai_reconfigure_alerts(alerts_to_enable, NULL) == ESP_OK) {
+    Serial.println("CAN Alerts reconfigured");
+  } else {
+    Serial.println("Failed to reconfigure alerts");
+    return;
+  }
+
+  _v_twai_enabled = true;
+}
+
 
 void Car::init(byte v_pin, byte c_pin) {
   _VCAN = new MCP_CAN(v_pin);
@@ -219,7 +266,7 @@ void Car::process() {
       Serial.print(rxId);
       Serial.print(" ");
       _printMessage(len, rxBuf, false);*/
-       _processGear(len, rxBuf);
+      _processGear(len, rxBuf);
     } else if (rxId == 0x229) {
       //Serial.print(" VC 229 ");
       //_printMessage(len, rxBuf, false);
@@ -230,6 +277,54 @@ void Car::process() {
     } else if (rxId == 0x2D3) {
       //Serial.print(" VC 2D3 ");
       //_printMessage(len, rxBuf, false);
+    }
+  }
+
+  if (_v_twai_enabled) {
+    // Check if alert happened
+    uint32_t alerts_triggered;
+    twai_read_alerts(&alerts_triggered, pdMS_TO_TICKS(10));
+    twai_status_info_t twaistatus;
+    twai_get_status_info(&twaistatus);
+
+    if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
+      Serial.println("Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
+      Serial.printf("Bus error count: %lu\n", twaistatus.bus_error_count);
+    }
+    if (alerts_triggered & TWAI_ALERT_TX_FAILED) {
+      Serial.println("Alert: The Transmission failed.");
+      Serial.printf("TX buffered: %lu\t", twaistatus.msgs_to_tx);
+      Serial.printf("TX error: %lu\t", twaistatus.tx_error_counter);
+      Serial.printf("TX failed: %lu\n", twaistatus.tx_failed_count);
+    }
+    if (alerts_triggered & TWAI_ALERT_TX_SUCCESS) {
+      //Serial.println("Alert: The Transmission was successful.");
+      // Serial.printf("TX buffered: %lu\t", twaistatus.msgs_to_tx);
+    }
+
+    // Handle alerts
+    if (alerts_triggered & TWAI_ALERT_ERR_PASS) {
+      Serial.println("Alert: TWAI controller has become error passive.");
+    }
+    if (alerts_triggered & TWAI_ALERT_BUS_ERROR) {
+      Serial.println("Alert: A (Bit, Stuff, CRC, Form, ACK) error has occurred on the bus.");
+      Serial.printf("Bus error count: %lu\n", twaistatus.bus_error_count);
+    }
+    // if (alerts_triggered & TWAI_ALERT_RX_QUEUE_FULL) {
+    //   Serial.println("Alert: The RX queue is full causing a received frame to be lost.");
+    //   Serial.printf("RX buffered: %lu\t", twaistatus.msgs_to_rx);
+    //   Serial.printf("RX missed: %lu\t", twaistatus.rx_missed_count);
+    //   Serial.printf("RX overrun %lu\n", twaistatus.rx_overrun_count);
+    // }
+
+    // Check if message is received
+    if (alerts_triggered & TWAI_ALERT_RX_DATA) {
+      // One or more messages received. Handle all.
+      twai_message_t message;
+      while (twai_receive(&message, 0) == ESP_OK) {
+        _handle_twai_rx_message(message);
+      }
+      twai_clear_receive_queue();
     }
   }
 
@@ -312,6 +407,29 @@ void Car::process() {
    gear = GEAR_DRIVE;
   }
   */
+}
+
+
+void Car::_handle_twai_rx_message(twai_message_t &message) {
+
+  long unsigned int rxId = message.identifier;
+  unsigned char len = message.data_length_code;
+  unsigned char rxBuf[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
   
-  
+  if (!(message.rtr)) {
+    for (int i = 0; i < message.data_length_code; i++) {
+      rxBuf[i] = message.data[i];
+    }
+    if (rxId == 0x3F5) {
+      _processLights(len, rxBuf);
+    } else if (rxId == 0x103) {
+      _processRightDoors(len, rxBuf);
+    } else if (rxId == 0x102) {
+      _processLeftDoors(len, rxBuf);
+    } else if (rxId == 0x2E1) {
+      _processVehicleStatus(len, rxBuf);
+    } else if (rxId == 0x118) {
+      _processGear(len, rxBuf);
+    }
+  }
 }

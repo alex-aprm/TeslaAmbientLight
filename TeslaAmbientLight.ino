@@ -29,6 +29,9 @@ const int ledPin = 12;
 
 
 const bool externalWifi = false;
+const char* ssid = "T3LIGHT";
+const char* password = "12345678";
+const char* passwordOTA = "12345678";
 
 #ifdef AUTOSPORT_ESP32
 const int vCanPin = 0;
@@ -44,9 +47,6 @@ const int rightFootwellHLPin = 9;
 const bool asBoard = false;
 const int vCanPin = 5;
 const int cCanPin = 13;
-const char* ssid = "T3LIGHT";
-const char* password = "123456";
-const char* passwordOTA = "123456";
 const int vCanRxPin = 0;
 const int vCanTxPin = 0;
 const int leftFootwellPin = 26;

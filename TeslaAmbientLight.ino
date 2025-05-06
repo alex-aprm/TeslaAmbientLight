@@ -28,6 +28,7 @@ const int ledPin = 12;
 #endif
 
 
+const bool externalWifi = false;
 
 #ifdef AUTOSPORT_ESP32
 const int vCanPin = 0;

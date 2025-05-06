@@ -47,7 +47,6 @@ const int cCanPin = 13;
 const char* ssid = "T3LIGHT";
 const char* password = "123456";
 const char* passwordOTA = "123456";
-const bool externalWifi = false;
 const int vCanRxPin = 0;
 const int vCanTxPin = 0;
 const int leftFootwellPin = 26;

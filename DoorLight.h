@@ -4,10 +4,11 @@
 #include <Adafruit_NeoPixel.h>
 #include "CarLight.h"
 
-const int numPixelsFront = 135;
+const int numPixelsFront = 136;
 const int numPixelsRear = 100;
 const int numPixelsPillar = 25;
 const int numPixels = numPixelsFront + numPixelsPillar + numPixelsRear;
+const bool pocketLedAddress = false;
 
 class DoorLight {
 public:
@@ -17,6 +18,7 @@ public:
 protected:
   int _numPixels;
   Adafruit_NeoPixel* _strip;
+  Adafruit_NeoPixel* _pocketStrip;
   byte _doorNum;
   byte _ledPin;
   byte _pocketLedPin;

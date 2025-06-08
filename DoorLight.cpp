@@ -11,15 +11,14 @@ void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin) {
     _firstPixel = numPixelsFront + numPixelsPillar;
     _lastPixel = numPixels - 1;
   }
-  for (int i = 0; i < _numPixels; i++) {
-    _setTargetColor(i, 50, 50, 50);
-    _setCurrentColor(i, 50, 50, 50);
-  }
 
   _pocketLedPin = pocketLedPin;
-  pinMode(pocketLedPin, OUTPUT);
-  //digitalWrite(pocketLedPin, HIGH);
 
+  if (pocketLedAddress) {
+    _pocketStrip = new Adafruit_NeoPixel(1, pocketLedPin, NEO_GRB + NEO_KHZ800);
+  } else {
+    pinMode(_pocketLedPin, OUTPUT);
+  }
   _strip = new Adafruit_NeoPixel(max(numPixelsFront, numPixelsRear), ledPin, NEO_GRB + NEO_KHZ800);
 
   _strip->begin();
@@ -70,23 +69,31 @@ void DoorLight::setColorByCarState(CarLight& carLight) {
     }
   }
 
-  if (pocketLight)
-    digitalWrite(_pocketLedPin, HIGH);
-  else
-    digitalWrite(_pocketLedPin, LOW);
-
+  if (pocketLedAddress) {
+    _pocketStrip->clear();
+    if (pocketLight)
+      _pocketStrip->setPixelColor(0, Adafruit_NeoPixel::Color(255, 255, 255));
+    else
+      _pocketStrip->setPixelColor(0, 0);
+    _pocketStrip->show();
+  } else {
+    if (pocketLight)
+      digitalWrite(_pocketLedPin, HIGH);
+    else
+      digitalWrite(_pocketLedPin, LOW);
+  }
   if (state == IDLE_INIT) {
     _stripBrightness = _brightness;
     for (int i = 0; i < _numPixels; i++) {
       _setTargetColor(i, 255 - map(i, 0, _numPixels, 0, 255), map(i, 0, _numPixels, 0, 255), 255);
     }
-    if (stateAge < 100) {
+    if (stateAge < 800) {
       for (int i = 0; i < _numPixels; i++) {
         _setCurrentColor(i, 0, 0, 0);
         _setTargetColor(i, 0, 0, 0);
       }
-    } else if (stateAge < 1000) {
-      int pos1 = map(stateAge, 0, 1000, 0, _numPixels);
+    } else if (stateAge < 2000) {
+      int pos1 = map(stateAge, 800, 2000, 0, _numPixels);
 
       for (int i = pos1; i < _numPixels; i++) {
         _setCurrentColor(i, 0, 0, 0);

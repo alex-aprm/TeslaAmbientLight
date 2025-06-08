@@ -28,7 +28,7 @@ void CarLight::processCarState(Car& car) {
   }
 
   for (byte i = 0; i < 4; i++) {
-    if (doorLightState[i] == IDLE_INIT && now - doorLightMs[i] > 1000)
+    if (doorLightState[i] == IDLE_INIT && now - doorLightMs[i] > 2000)
       _changeDoorLightState(i, IDLE);
   }
 

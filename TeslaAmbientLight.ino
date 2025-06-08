@@ -161,16 +161,19 @@ void setup() {
 }
 
 void loop() {
-  if (!car.displayOn)
-   delay(50);
   ArduinoOTA.handle();
   if (role == 0) {
     car.process();
+    if (!car.displayOn)
+      delay(10);
+    else
+      delay(1);
     carLight.processCarState(car);
     carLight.sendLightState();
     leftFootLight.setColorByCarState(carLight);
     rightFootLight.setColorByCarState(carLight);
   } else {
+    delay(10);
     carLight.receiveLightState();
     doorLight.setColorByCarState(carLight);
     mirrorLight.setColorByCarState(carLight);

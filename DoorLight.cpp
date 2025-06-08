@@ -16,6 +16,8 @@ void DoorLight::init(byte doorNum, byte ledPin, byte pocketLedPin) {
 
   if (pocketLedAddress) {
     _pocketStrip = new Adafruit_NeoPixel(1, pocketLedPin, NEO_GRB + NEO_KHZ800);
+    _pocketStrip->begin();
+    _pocketStrip->setBrightness(30);
   } else {
     pinMode(_pocketLedPin, OUTPUT);
   }

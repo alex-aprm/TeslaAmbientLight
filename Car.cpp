@@ -237,6 +237,8 @@ void Car::_processVehicleStatus(unsigned char len, unsigned char data[]) {
 
 void Car::_processVehicleControl(unsigned char len, unsigned char data[]) {
   //_printMessage(len, data, false);
+  if (useAmbientLightSetting)
+    ambientLight = (data[5] & 0x01) == 0x01;
   for (byte i = 0; i < len; i++)
     _vehicleControlFrame[i] = data[i];
 }
@@ -322,8 +324,6 @@ void Car::process() {
       //processHandsOn(len, rxBuf);
     } else if (rxId == 0x238) {
       //processHandsOn1(len, rxBuf);
-    } else if (rxId == 0x273) {
-      _processVehicleControl(len, rxBuf);
     } else if (rxId == 0x118) {
       //Serial.print(" CC 118 ");
       //_printMessage(len, rxBuf, false);
@@ -351,6 +351,8 @@ void Car::_handle_twai_rx_message(twai_message_t &message) {
     }
     if (rxId == 0x3F5) {
       _processLights(len, rxBuf);
+    } else if (rxId == 0x273) {
+      _processVehicleControl(len, rxBuf);
     } else if (rxId == 0x103) {
       _processRightDoors(len, rxBuf);
     } else if (rxId == 0x102) {

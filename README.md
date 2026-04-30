@@ -52,6 +52,10 @@ What's actually implemented today:
 - Tracks the car's display backlight signal so the ambient light follows day/night
 - Brightness floor when a door is open or the car is in Park
 
+**Ambient-light setting follow**
+- Mirrors the car's *Ambient Light* toggle from the UI (decoded from chassis CAN `0x273`, bit 0 of byte 5). When the driver turns ambient light off in the car, the strips fade out; turning it back on restores them.
+- Some RWD trims don't have the Ambient Light setting in the UI and may not transmit the bit (or transmit it as always-zero), which would leave the strips permanently off. For those cars, set `car.useAmbientLightSetting = false;` in `setup()` (next to the existing `car.openFrunkWithDoor = true;` line). The strips then stay on whenever the center display is on.
+
 **Connectivity & ops**
 - Master runs its own Wi-Fi AP that the door slaves join (or optionally joins an existing AP)
 - UDP broadcast on port `3333`; adaptive cadence (30 ms when something is happening, 10 s when idle) keeps the channel quiet
@@ -80,7 +84,7 @@ One master ESP32 + four door slaves, all on a single Wi-Fi network that the mast
 | V-CAN   | 0x2E1 | Vehicle status (incl. frunk)                      |
 | V-CAN   | 0x118 | Gear selector                                     |
 | C-CAN   | 0x399 | Autopilot state, blind-spot detection, hands-on   |
-| C-CAN   | 0x273 | Vehicle control frame (template for TX)           |
+| C-CAN   | 0x273 | Vehicle control frame (template for TX) + ambient-light bit |
 
 Two CAN paths are supported: external MCP2515 over SPI (plain ESP32) or the native TWAI controller (Autosports ESP32 CAN board) — see [Boards](#boards). Chassis CAN always goes through MCP2515.
 

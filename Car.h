@@ -19,6 +19,13 @@ public:
   void initAS(byte c_pin, byte v_rx_pin, byte v_tx_pin);
   void process();
   byte brightness = 10;
+  // Mirrors the car's "Ambient Light" setting from chassis CAN 0x273 bit0.
+  // When the user turns ambient light off in the car UI, the strips fade out.
+  // RWD trims without the setting in the UI may not transmit the bit at all
+  // (or transmit it as always-zero) — set useAmbientLightSetting = false in
+  // setup() on those cars to keep the strips on whenever the display is on.
+  bool ambientLight = true;
+  bool useAmbientLightSetting = true;
   bool displayOn = false;
   bool turningLeft = false;
   bool turningLeftLight = false;

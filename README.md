@@ -149,8 +149,8 @@ The firmware supports a few different ESP32 variants. Pick the right one for eac
 
 The master is wired to both Vehicle CAN and Chassis CAN. Two options:
 
-- **Plain ESP32 + 2× MCP2515.** Default build. Both CAN buses go through external MCP2515 controllers over SPI. Uses `Car::init(vCanPin, cCanPin)` with chip-select pins 5 (V-CAN) and 13 (C-CAN). Leave `AUTOSPORT_ESP32` undefined.
-- **Autosports ESP32 CAN board.** Has a built-in TWAI/CAN transceiver, so Vehicle CAN runs natively on the SoC and only Chassis CAN needs an MCP2515. Uses `Car::initAS(cCanPin, vCanRxPin, vCanTxPin)`. Define `AUTOSPORT_ESP32` (use `#define AUTOSPORT_ESP32` — note the current source uses `#ifdef`, so the value doesn't matter, only whether it's defined).
+- **Plain ESP32 + 2× MCP2515.** Default build. Both CAN buses go through external MCP2515 controllers over SPI. Uses `Car::init(vCanPin, cCanPin)` with chip-select pins 5 (V-CAN) and 13 (C-CAN). Set `#define AUTOSPORT_ESP32 false`.
+- **Autosports ESP32 CAN board.** Has a built-in TWAI/CAN transceiver, so Vehicle CAN runs natively on the SoC and only Chassis CAN needs an MCP2515. Uses `Car::initAS(cCanPin, vCanRxPin, vCanTxPin)`. Set `#define AUTOSPORT_ESP32 true`.
 
 The master also brings up the Wi-Fi AP that the door slaves connect to.
 

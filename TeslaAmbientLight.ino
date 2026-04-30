@@ -33,7 +33,7 @@ const char* ssid = "T3LIGHT";
 const char* password = "12345678";
 const char* passwordOTA = "12345678";
 
-#ifdef AUTOSPORT_ESP32
+#if AUTOSPORT_ESP32
 const int vCanPin = 0;
 const int cCanPin = 10;
 const bool asBoard = true;

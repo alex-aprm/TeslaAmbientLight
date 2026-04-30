@@ -202,7 +202,7 @@ void DoorLight::_fadeColor() {
 
       double needToChange = delta * step / left;
       if (abs(needToChange) > abs(_currentColor[c][i] - _targetColor[c][i]))
-        _currentColor[c][i] == _targetColor[c][i];
+        _currentColor[c][i] = _targetColor[c][i];
       else
         _currentColor[c][i] += needToChange;
     }

@@ -26,7 +26,7 @@ void MirrorLight::setColorByCarState(CarLight& carLight) {
     _setTargetColor(i, 0, 0, 0);
   }
   if (state == TURNING_BLIND_SPOT) {
-    for (int i = 1; i < _numPixels - 1; i++) {
+    for (int i = 6; i < _numPixels - 5; i++) {
       _setTargetColor(i, 255, 0, 0);
     }
   } else if (state == BLIND_SPOT) {

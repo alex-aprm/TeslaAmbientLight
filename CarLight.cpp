@@ -22,7 +22,7 @@ void CarLight::processCarState(Car& car) {
     }
   }
 
-  if (!car.displayOn) {
+  if (!car.displayOn || !car.ambientLight) {
     footwellLightState = FOOTWELL_OFF;
     _oldGear = GEAR_NEUTRAL;
   }
@@ -67,7 +67,7 @@ void CarLight::processCarState(Car& car) {
         _changeDoorLightState(i, IDLE_INIT);
   }
 
-  if (!car.displayOn) {
+  if (!car.displayOn || !car.ambientLight) {
     for (byte i = 0; i < 4; i++)
       if (doorLightState[i] == IDLE || doorLightState[i] == IDLE_INIT)
         _changeDoorLightState(i, WAIT);
@@ -123,8 +123,8 @@ void CarLight::processCarState(Car& car) {
 
   stateChanged = stateChanged || (oldBrightness != brightness);
 
-  if ((someDoorOpen || car.gear < GEAR_PARK) && brightness < 0xC8)
-    brightness = 0xC8;
+  if ((someDoorOpen || car.gear <= GEAR_PARK) && brightness < 0xA0)
+    brightness = 0xA0;
 
   for (byte i = 0; i < 4; i++)
     doorLightAge[i] = millis() - doorLightMs[i];
@@ -175,10 +175,10 @@ void CarLight::receiveLightState() {
         byte lastState = doorLightState[doorNum];
         unsigned long stateMs = doorLightMs[doorNum];
 
-        byte state = packetBuffer[1 + doorNum * doorLen];
+        byte state = (byte)packetBuffer[1 + doorNum * doorLen];
         unsigned long age = 0;
         for (byte i = 0; i < 4; i++)
-          age += packetBuffer[2 + i + doorNum * doorLen] * pow(255, i);
+          age |= (unsigned long)(uint8_t)packetBuffer[2 + i + doorNum * doorLen] << (i * 8);
 
         unsigned long stateNewMs = millis() - age;
         if (state == lastState) {

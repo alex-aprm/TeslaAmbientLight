@@ -223,6 +223,47 @@ Anyway, I don't think it's a good idea to put additional load, so I've taken the
 ![image](images/connector-door3-1.png)
 ![image](images/connector-door4.png)
 
+# Flashing
+
+The same `TeslaAmbientLight.ino` runs on every node. Each node tells itself which role it plays (master / front-left door / front-right door / rear-left door / rear-right door) by reading a single byte from EEPROM at boot. Flashing happens in two phases.
+
+## Phase 1 — burn each node's role into EEPROM (USB, once per node)
+
+Do this once for each of the five ESP32s, before you install them in the car. You'll edit the sketch, flash, and repeat — five flashes total.
+
+1. Open `TeslaAmbientLight.ino`.
+2. Set the role for the node you're about to flash:
+   ```cpp
+   unsigned char role = DOOR_MASTER;        // central module
+   // or DOOR_FRONT_LEFT / DOOR_FRONT_RIGHT / DOOR_REAR_LEFT / DOOR_REAR_RIGHT
+   ```
+3. Enable the EEPROM write:
+   ```cpp
+   const bool saveRoleToEEPROM = true;
+   const bool readRoleFromEEPROM = true;
+   ```
+4. Connect the node over USB and flash from the Arduino IDE.
+5. Open the serial monitor at 921600 baud and verify the `Role: N` line matches the role you set (`0` master, `1` front-right, `2` front-left, `3` rear-right, `4` rear-left).
+6. Change `role` to the next node's value and repeat from step 4 for each remaining node.
+
+Label each ESP32 (front-left / front-right / rear-left / rear-right / master) so you don't lose track when installing.
+
+## Phase 2 — switch to read-only-from-EEPROM (used for every flash from now on)
+
+Once every node has its role written, flip the save flag back off:
+
+```cpp
+const bool saveRoleToEEPROM = false;
+const bool readRoleFromEEPROM = true;
+```
+
+Now the binary is role-agnostic — the same `.bin` runs unmodified on all five nodes. From this point on you can:
+
+- Flash any node over USB without changing source between nodes.
+- Flash over [ArduinoOTA](#features) once everything is installed in the car (default port `3232`, password = the `passwordOTA` you set in [Passwords](#passwords--change-before-flashing)). The slaves are at `192.168.4.11`–`192.168.4.14` and the master at `192.168.4.10` on the master AP.
+
+If you ever need to re-assign a node (e.g. a replacement ESP32, or you're swapping front-left ↔ front-right), just rerun phase 1 for that one node.
+
 # Used resources
 
 https://service.tesla.com/docs/Model3/ElectricalReference/prog-187/interactive/html/index.html

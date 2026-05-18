@@ -276,4 +276,4 @@ https://github.com/nmullaney/candash
 
 # Buy me a coffee
 
-Support me - [buymeacoffee.com/alexaprm](buymeacoffee.com/alexaprm)
+Support me - [buymeacoffee.com/alexaprm](https://buymeacoffee.com/alexaprm)

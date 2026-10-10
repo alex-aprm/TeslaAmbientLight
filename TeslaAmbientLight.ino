@@ -8,6 +8,7 @@
 #include "DoorLight.h"
 #include "FootLight.h"
 #include "MirrorLight.h"
+#include "EngineTelemetry.h"
 
 #define AUTOSPORT_ESP32 false
 
@@ -59,6 +60,9 @@ unsigned char role = DOOR_MASTER;  // DOOR_FRONT_RIGHT, DOOR_FRON_LEFT, DOOR_REA
 const bool saveRoleToEEPROM = false;
 const bool readRoleFromEEPROM = true;
 
+// Broadcast powertrain telemetry for the EngineSound node (EngineSound/ folder).
+const bool engineSoundTelemetry = true;
+
 Car car;
 CarLight carLight;
 
@@ -67,6 +71,7 @@ FootLight rightFootLight;
 
 DoorLight doorLight;
 MirrorLight mirrorLight;
+EngineTelemetry engineTelemetry;
 
 void setup() {
   car.openFrunkWithDoor = true;
@@ -134,6 +139,8 @@ void setup() {
   }
 
   carLight.init();
+  if (role == 0 && engineSoundTelemetry)
+    engineTelemetry.init();
   ArduinoOTA.onStart([]() {
     String type;
     if (ArduinoOTA.getCommand() == U_FLASH)
@@ -170,6 +177,8 @@ void loop() {
       delay(1);
     carLight.processCarState(car);
     carLight.sendLightState();
+    if (engineSoundTelemetry)
+      engineTelemetry.send(car);
     leftFootLight.setColorByCarState(carLight);
     rightFootLight.setColorByCarState(carLight);
   } else {

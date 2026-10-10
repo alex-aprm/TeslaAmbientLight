@@ -45,6 +45,16 @@ public:
   bool doorOpen[4] = { false, false, false, false };
   bool frunkOpen = false;
   bool doorHandlePull[2] = { false, false };
+
+  // Powertrain telemetry (V-CAN), used by the engine sound module.
+  float accelPedal = 0;        // 0x118 DI_accelPedalPos, %
+  bool brakePressed = false;   // 0x118 DI_brakePedalState
+  float speedKph = 0;          // 0x257 DI_vehicleSpeed, km/h
+  float rearTorqueNm = 0;      // 0x108 DIR_torqueActual, Nm
+  float rearAxleRpm = 0;       // 0x108 DIR_axleSpeed, RPM
+  float frontTorqueNm = 0;     // 0x186 DIF_torqueActual, Nm (AWD only, TWAI path only)
+  float rearPowerKw = 0;       // 0x266 RearPower266, kW (TWAI path only)
+  unsigned long powertrainMs = 0;  // millis() of the last powertrain frame
   void openFrunk();
   void unlock();
   void unlockRemote();
@@ -69,6 +79,11 @@ private:
   void _processVehicleControl(unsigned char len, unsigned char data[]);
   void _processVehicleStatus(unsigned char len, unsigned char data[]);
   void _processGear(unsigned char len, unsigned char data[]);
+  void _processSpeed(unsigned char len, unsigned char data[]);
+  void _processRearTorque(unsigned char len, unsigned char data[]);
+  void _processFrontTorque(unsigned char len, unsigned char data[]);
+  void _processRearPower(unsigned char len, unsigned char data[]);
+  void _dispatchVehicleFrame(long unsigned int rxId, unsigned char len, unsigned char data[]);
   void _monitor(long unsigned int rxId, unsigned char len, unsigned char rxBuf[]);
   void _printMessage(unsigned char len, unsigned char data[], bool out);
   void _handle_twai_rx_message(twai_message_t &message);

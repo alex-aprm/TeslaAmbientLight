@@ -62,6 +62,13 @@ What's actually implemented today:
 - ArduinoOTA on every node — no need to pull door cards apart for firmware updates
 - Per-node role stored in EEPROM, so one firmware binary is reused for all five nodes
 
+**Engine sound (optional sixth node)**
+- Synthesized combustion-engine sound in the car speakers, driven by the real accelerator pedal, speed and motor torque
+- Virtual automatic gearbox: launch with clutch slip, load-dependent shift points, kickdown, rev-matched downshifts, coasting downshifts
+- Free revving and rev limiter in Park/Neutral, starter crank when you select a gear
+- Overrun burble and pops on lift-off/regen, bang on full-throttle upshifts
+- Four engines: crossplane V8, straight-six, flat-four, V12. See [Engine sound](#engine-sound)
+
 **Master-only CAN-out helpers** (not bound to a UI yet, but wired in `Car`): `unlock()`, `unlockRemote()`, `openFrunk()`, `wakeup()`
 
 # Architecture
@@ -82,7 +89,11 @@ One master ESP32 + four door slaves, all on a single Wi-Fi network that the mast
 | V-CAN   | 0x102 | Left-side doors (open + handle pull)              |
 | V-CAN   | 0x103 | Right-side doors (open + handle pull)             |
 | V-CAN   | 0x2E1 | Vehicle status (incl. frunk)                      |
-| V-CAN   | 0x118 | Gear selector                                     |
+| V-CAN   | 0x118 | Gear selector, accelerator pedal, brake           |
+| V-CAN   | 0x257 | Vehicle speed (engine sound)                      |
+| V-CAN   | 0x108 | Rear motor torque + axle speed (engine sound)     |
+| V-CAN   | 0x186 | Front motor torque, AWD (engine sound, TWAI only) |
+| V-CAN   | 0x266 | Rear inverter power (engine sound, TWAI only)     |
 | C-CAN   | 0x399 | Autopilot state, blind-spot detection, hands-on   |
 | C-CAN   | 0x273 | Vehicle control frame (template for TX) + ambient-light bit |
 
@@ -115,6 +126,37 @@ Slaves never read the CAN bus and have no knowledge of Tesla's protocol — only
 
 My TM3 is RWD, where the factory door-pocket light wires are inactive. I reuse those wires for low-voltage power delivery to each door slave. See "wiring" below.
 
+# Engine sound
+
+An optional sixth node turns the Tesla into a (virtual) petrol car. The master already decodes V-CAN, so it simply broadcasts the powertrain signals; a second ESP32 synthesizes the engine and streams it to the car over Bluetooth, exactly like a phone playing music.
+
+```
+ V-CAN ──► [ master ESP32 ] ──Wi-Fi UDP :3334, 50 Hz──► [ EngineSound ESP32 ] ──Bluetooth A2DP──► Tesla speakers
+```
+
+**Hardware.** Any *classic* ESP32 board (ESP32-WROOM-32 / ESP32-DevKitC). It must be the original ESP32: only it has Bluetooth Classic, which A2DP audio needs. ESP32-S3 / C3 / C6 will not work for this node (the sketch refuses to compile for them). Power it from the same 5 V converter as the master; it needs no CAN connection.
+
+**Master side.** Nothing to wire. `EngineTelemetry` is enabled by `engineSoundTelemetry = true` in `TeslaAmbientLight.ino`. It sends 50 packets/s while the car is awake and one per second while it sleeps, on UDP port 3334 (the door nodes listen on 3333 and ignore it). On the plain-ESP32 master the six MCP2515 filters are re-packed to make room for speed and torque: 0x102/0x103 and 0x3F4/0x3F5 now share a filter each through mask `0x7FE`. Front motor torque (AWD) and inverter power are only read on the Autosport/TWAI master, which accepts all IDs; on RWD they are not needed.
+
+**Flashing the EngineSound node.**
+1. Install the library *ESP32-A2DP* by Phil Schatzmann (Library Manager or https://github.com/pschatzmann/ESP32-A2DP).
+2. Open `EngineSound/EngineSound.ino`, set the same `ssid`, `password` and `passwordOTA` as the master.
+3. Board *ESP32 Dev Module*, Partition Scheme *Minimal SPIFFS (1.9MB APP with OTA)* (the firmware is ~1.7 MB because of Wi-Fi + Bluetooth). Flash over USB. Later updates work over OTA at `192.168.4.15`.
+
+**Pairing with the car.** On the car screen open Bluetooth → *Add new device*. The node scans and connects to the first device whose name contains `Tesla` (change it on the settings page if your car has a custom name). Confirm the code on the car screen. After that it reconnects by itself. While it is connected it is the car's media source, so your phone's music is paused; switch source on the car screen to go back.
+
+**Settings page.** Join the `T3LIGHT` Wi-Fi with your phone and open http://192.168.4.15/ to choose the engine, set the volume, turn the sound off, and watch live telemetry (car gear, speed, pedal, torque, virtual rpm and gear).
+
+**Tuning engines on a PC.** `EngineSound/tools/render_wav.cpp` runs the same model and synthesizer on a scripted drive and writes a WAV, so you can tweak `PROFILES` in `EngineModel.h` without sitting in the car:
+```
+cd EngineSound/tools && g++ -O2 -std=c++17 -I.. render_wav.cpp -o render_wav && ./render_wav v8 v8.wav
+```
+
+**Limitations.**
+- Latency: Bluetooth audio adds roughly 150–250 ms between the pedal and the sound, Wi-Fi power save (mandatory when Wi-Fi and Bluetooth share the radio) up to ~100 ms more.
+- Wi-Fi and Bluetooth share one radio on the ESP32. The IDF coexistence handles it, but if you hear dropouts, move the node closer to the master or reduce other Wi-Fi traffic.
+- Torque scaling is adaptive (the strongest pull seen recently = full load), so the first hard launch after boot sounds a little "too loud"; it settles within seconds.
+
 # Requirements
 
 ## Tools
@@ -128,6 +170,7 @@ My TM3 is RWD, where the factory door-pocket light wires are inactive. I reuse t
 
 ## Components
 - ESP 32 (with USB) x5
+- Classic ESP32 (ESP32-WROOM-32 / DevKitC) x1 — only for the optional engine sound node
 - MCP2515 x2
 - DC-DC converter (1 or more)
 - Tesla CAN connector. If you can`t find one with 6 wires (2 big pins for power, which have no corresponding pins in the car and 2x2 for CAN buses), buy 2 and move pins. Or take pins from the next one, there are unused ones. 

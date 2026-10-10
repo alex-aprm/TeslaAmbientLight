@@ -49,6 +49,8 @@ engine::Synth synth;
 struct Settings {
   uint8_t profile = 0;
   uint8_t volume = 70;          // %
+  uint8_t pops = 40;            // % of the profile's pops/crackle
+  uint8_t bass = 6;             // dB low-shelf boost, 0..12
   bool enabled = true;
   String btName = "Tesla";      // substring of the car's Bluetooth name
 } settings;
@@ -87,6 +89,8 @@ int32_t audioCallback(Frame* frames, int32_t count) {
 
   model.update(count / 44100.0f, in);
   synth.volume = settings.volume / 100.0f;
+  synth.pops = settings.pops / 100.0f;
+  synth.bassDb = settings.bass;
   synth.render((int16_t*)frames, count, model.state());
 
   statusRpm = model.state().rpm;
@@ -145,6 +149,8 @@ void loadSettings() {
   prefs.begin("engine", true);
   settings.profile = prefs.getUChar("profile", 0);
   settings.volume = prefs.getUChar("volume", 70);
+  settings.pops = prefs.getUChar("pops", 40);
+  settings.bass = prefs.getUChar("bass", 6);
   settings.enabled = prefs.getBool("enabled", true);
   settings.btName = prefs.getString("btname", "Tesla");
   prefs.end();
@@ -155,6 +161,8 @@ void saveSettings() {
   prefs.begin("engine", false);
   prefs.putUChar("profile", settings.profile);
   prefs.putUChar("volume", settings.volume);
+  prefs.putUChar("pops", settings.pops);
+  prefs.putUChar("bass", settings.bass);
   prefs.putBool("enabled", settings.enabled);
   prefs.putString("btname", settings.btName);
   prefs.end();
@@ -184,12 +192,16 @@ void handleRoot() {
   }
   h += F("</select><label>Volume <span id=vv></span></label><input type=range name=volume min=0 max=100 oninput='vv.textContent=this.value' value=");
   h += String(settings.volume);
+  h += F("><label>Pops <span id=pv></span>%</label><input type=range name=pops min=0 max=100 oninput='pv.textContent=this.value' value=");
+  h += String(settings.pops);
+  h += F("><label>Bass +<span id=bv></span> dB</label><input type=range name=bass min=0 max=12 oninput='bv.textContent=this.value' value=");
+  h += String(settings.bass);
   h += F("><label><input type=checkbox name=enabled value=1");
   if (settings.enabled) h += F(" checked");
   h += F("> Sound on</label><label>Car Bluetooth name contains</label><input type=text name=btname value=\"");
   h += htmlEscape(settings.btName);
   h += F("\"><button>Save</button></form><div id=s>...</div><script>"
-         "vv.textContent=document.querySelector('[name=volume]').value;"
+         "for(const[i,n]of[[vv,'volume'],[pv,'pops'],[bv,'bass']])i.textContent=document.querySelector('[name='+n+']').value;"
          "setInterval(()=>fetch('/status').then(r=>r.json()).then(j=>{s.textContent="
          "'Bluetooth: '+(j.bt?'connected':'searching')+'\\nTelemetry: '+(j.age<1000?'ok':'none')+' ('+j.packets+' pkts)'"
          "+'\\nCar: '+['?','P','R','N','D'][j.carGear]+'  '+j.speed.toFixed(0)+' km/h  pedal '+j.pedal.toFixed(0)+'%  '+j.torque+' Nm'"
@@ -207,6 +219,8 @@ void handleSave() {
     }
   }
   if (web.hasArg("volume")) settings.volume = constrain(web.arg("volume").toInt(), 0, 100);
+  if (web.hasArg("pops")) settings.pops = constrain(web.arg("pops").toInt(), 0, 100);
+  if (web.hasArg("bass")) settings.bass = constrain(web.arg("bass").toInt(), 0, 12);
   settings.enabled = web.hasArg("enabled");
   if (web.hasArg("btname")) settings.btName = web.arg("btname").substring(0, 40);
   saveSettings();

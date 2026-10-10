@@ -31,6 +31,16 @@ struct Biquad {
     float w = 6.2831853f * f / fs, c = cosf(w), a = sinf(w) / (2 * q), n = 1 / (1 + a);
     b0 = a * n; b1 = 0; b2 = -a * n; a1 = -2 * c * n; a2 = (1 - a) * n;
   }
+  void setLowShelf(float fs, float f, float dbGain) {  // RBJ, slope 1
+    float A = powf(10.0f, dbGain / 40.0f), w = 6.2831853f * f / fs, c = cosf(w), sn = sinf(w);
+    float alpha = sn / 2 * sqrtf(2.0f), k = 2 * sqrtf(A) * alpha;
+    float n = 1 / ((A + 1) + (A - 1) * c + k);
+    b0 = A * ((A + 1) - (A - 1) * c + k) * n;
+    b1 = 2 * A * ((A - 1) - (A + 1) * c) * n;
+    b2 = A * ((A + 1) - (A - 1) * c - k) * n;
+    a1 = -2 * ((A - 1) + (A + 1) * c) * n;
+    a2 = ((A + 1) + (A - 1) * c - k) * n;
+  }
   void setHighpass(float fs, float f, float q) {
     float w = 6.2831853f * f / fs, c = cosf(w), a = sinf(w) / (2 * q), n = 1 / (1 + a);
     b0 = (1 + c) * 0.5f * n; b1 = -(1 + c) * n; b2 = b0; a1 = -2 * c * n; a2 = (1 - a) * n;
@@ -63,12 +73,24 @@ public:
   }
 
   float volume = 0.8f;  // 0..1, applied after the soft clipper
+  float pops = 0.4f;    // 0..1, scales overrun crackle and shift bangs
+  float bassDb = 6.0f;  // 0..12 dB low-shelf boost below ~150 Hz
 
   // Render interleaved stereo int16. state = engine state for this block.
   void render(int16_t* out, int frames, const EngineState& st) {
     const Profile& p = *_p;
     if (_lastPopBursts == 0xFFFFFFFF) _lastPopBursts = st.popBursts;
-    if (st.popBursts != _lastPopBursts) { _pendingPops += (int)(st.popBursts - _lastPopBursts); _lastPopBursts = st.popBursts; }
+    if (st.popBursts != _lastPopBursts) {
+      for (uint32_t k = _lastPopBursts; k != st.popBursts; k++)
+        if (_randU() < pops) _pendingPops++;
+      _lastPopBursts = st.popBursts;
+    }
+    if (bassDb != _shelfDb) {
+      _shelfDb = bassDb;
+      for (int b = 0; b < 2; b++) _shelf[b].setLowShelf(_fs, 150, _shelfDb);
+    }
+    // keep headroom when the bass is raised so the clipper doesn't flatten it
+    const float bassTrim = powf(10.0f, -_shelfDb / 30.0f);
 
     float rpm0 = _rpm, rpm1 = st.rpm;
     for (int base = 0; base < frames; base += SUB) {
@@ -87,8 +109,8 @@ public:
       float pulseAmp = st.combustion ? fmaxf((0.25f + 0.75f * posLoad) * (1.0f - 0.45f * overrun), 0.12f) : 0.08f;
       float noiseAmt = p.noise * (st.combustion ? (0.5f + posLoad) : 0.3f);
       float variation = p.variation * (st.rpm < p.idleRpm * 1.4f ? 1.0f : 0.4f) + 0.25f * overrun;
-      float popProb = st.combustion ? p.crackle * overrun * clampf((st.rpm - 1800) / 2500.0f, 0, 1) : 0;
-      if (st.ignitionCut) popProb = fmaxf(popProb, p.crackle * 0.6f);
+      float popProb = st.combustion ? pops * p.crackle * overrun * clampf((st.rpm - 2200) / 2500.0f, 0, 1) : 0;
+      if (st.ignitionCut) popProb = fmaxf(popProb, pops * p.crackle * 0.4f);
       float intakeAmp = p.intake * _throttleS * (0.3f + rpmNorm);
       _throttleS += (st.throttle - _throttleS) * 0.2f;
       float invPw = 1.0f / p.pulseWidth;
@@ -171,9 +193,9 @@ public:
         float common = crack + starter + intake;
         float l = (0.72f * outB[0] + 0.28f * outB[1]) + common;
         float rr = (0.28f * outB[0] + 0.72f * outB[1]) + common;
-        float g = p.gain * _level * 1.3f;
-        l = _softClip(l * g) * volume;
-        rr = _softClip(rr * g) * volume;
+        float g = p.gain * _level * 1.3f * bassTrim;
+        l = _softClip(_shelf[0].process(l) * g) * volume;
+        rr = _softClip(_shelf[1].process(rr) * g) * volume;
         out[(base + i) * 2] = (int16_t)(clampf(l, -1, 1) * 32000);
         out[(base + i) * 2 + 1] = (int16_t)(clampf(rr, -1, 1) * 32000);
       }
@@ -185,7 +207,8 @@ public:
 private:
   const Profile* _p = &PROFILES[0];
   float _fs = 44100;
-  Biquad _res[2][3], _lp[2], _dc[2], _popBp;
+  Biquad _res[2][3], _lp[2], _dc[2], _popBp, _shelf[2];
+  float _shelfDb = -1;
   float _pipe[2][PIPE_LEN];
   int _pipeDelay[2] = { 100, 100 };
   int _pipePos = 0;

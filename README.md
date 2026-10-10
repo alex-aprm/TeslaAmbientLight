@@ -145,7 +145,7 @@ An optional sixth node turns the Tesla into a (virtual) petrol car. The master a
 
 **Pairing with the car.** On the car screen open Bluetooth → *Add new device*. The node scans and connects to the first device whose name contains `Tesla` (change it on the settings page if your car has a custom name). Confirm the code on the car screen. After that it reconnects by itself. While it is connected it is the car's media source, so your phone's music is paused; switch source on the car screen to go back.
 
-**Settings page.** Join the `T3LIGHT` Wi-Fi with your phone and open http://192.168.4.15/ to choose the engine, set the volume, turn the sound off, and watch live telemetry (car gear, speed, pedal, torque, virtual rpm and gear).
+**Settings page.** Join the `T3LIGHT` Wi-Fi with your phone and open http://192.168.4.15/ to choose the engine, set the volume, the amount of pops (default 40 %) and the bass boost (default +6 dB), turn the sound off, and watch live telemetry (car gear, speed, pedal, torque, virtual rpm and gear).
 
 **Tuning engines on a PC.** `EngineSound/tools/render_wav.cpp` runs the same model and synthesizer on a scripted drive and writes a WAV, so you can tweak `PROFILES` in `EngineModel.h` without sitting in the car:
 ```

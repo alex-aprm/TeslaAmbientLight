@@ -324,7 +324,7 @@ private:
       if ((rpmNow < down || kickdown) && lowerRpm < p.redlineRpm * 0.92f) {
         _vgear--;
         _shift = SHIFT_DOWN_BLIP; _shiftT = 0; _sinceShift = 0;
-        if (pedal < 0.1f) _s.popBursts++;  // rev-matched downshift on overrun
+        if (pedal < 0.1f && rpmNow > p.redlineRpm * 0.45f) _s.popBursts++;  // high-rpm downshift on overrun
       }
     }
   }

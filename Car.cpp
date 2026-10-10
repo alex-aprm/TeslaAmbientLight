@@ -74,13 +74,16 @@ void Car::init(byte v_pin, byte c_pin) {
 
   if (_VCAN->begin(MCP_STDEXT, CAN_500KBPS, MCP_8MHZ) == CAN_OK) {
     _v_enabled = true;
-    _VCAN->init_Mask(0, 0, 0x07FF0000);
-    _VCAN->init_Filt(0, 0, 0x03F50000);
+    // MCP2515 has only 6 filters. RXB0 uses mask 0x7FE so one filter catches
+    // a pair of IDs (0x102/0x103 doors, 0x3F4/0x3F5 lights); RXB1 is exact.
+    _VCAN->init_Mask(0, 0, 0x07FE0000);
+    _VCAN->init_Filt(0, 0, 0x03F40000);  // 0x3F5 lights
+    _VCAN->init_Filt(1, 0, 0x01020000);  // 0x102 + 0x103 doors
     _VCAN->init_Mask(1, 0, 0x07FF0000);
-    _VCAN->init_Filt(1, 0, 0x01020000);
-    _VCAN->init_Filt(2, 0, 0x01030000);
-    _VCAN->init_Filt(3, 0, 0x02E10000);
-    _VCAN->init_Filt(4, 0, 0x01180000);
+    _VCAN->init_Filt(2, 0, 0x02E10000);  // vehicle status
+    _VCAN->init_Filt(3, 0, 0x01180000);  // gear + accelerator pedal
+    _VCAN->init_Filt(4, 0, 0x02570000);  // vehicle speed
+    _VCAN->init_Filt(5, 0, 0x01080000);  // rear drive unit torque / axle speed
     _VCAN->setMode(MCP_NORMAL);
     Serial.println("Vehicle CAN BUS OK");
   } else
@@ -222,10 +225,64 @@ void Car::_processLeftDoors(unsigned char len, unsigned char data[]) {
   //_printMessage(len, data, false);
 }
 
+// Little-endian (Intel) signal extraction, same convention as the DBC files.
+static int32_t _bits(const unsigned char data[], byte start, byte len, bool isSigned) {
+  uint64_t raw = 0;
+  for (int i = 7; i >= 0; i--)
+    raw = (raw << 8) | data[i];
+  uint32_t v = (uint32_t)((raw >> start) & ((1ULL << len) - 1));
+  if (isSigned && (v & (1UL << (len - 1))))
+    return (int32_t)v - (int32_t)(1UL << len);
+  return (int32_t)v;
+}
+
 void Car::_processGear(unsigned char len, unsigned char data[]) {
   gear = (Gear)((data[2] >> 5) & 0x07);
   if (gear == 0x07)
     gear = (Gear)GEAR_UNKNOWN;
+  if (len >= 5) {
+    accelPedal = _bits(data, 32, 8, false) * 0.4f;     // DI_accelPedalPos
+    brakePressed = _bits(data, 19, 2, false) == 2;     // DI_brakePedalState: 2 = on
+    powertrainMs = millis();
+  }
+}
+
+void Car::_processSpeed(unsigned char len, unsigned char data[]) {
+  if (len < 3) return;
+  speedKph = _bits(data, 12, 12, false) * 0.08f - 40.0f;  // DI_vehicleSpeed
+  powertrainMs = millis();
+}
+
+void Car::_processRearTorque(unsigned char len, unsigned char data[]) {
+  if (len < 7) return;
+  rearTorqueNm = _bits(data, 27, 13, true) * 2.0f;   // DIR_torqueActual
+  rearAxleRpm = _bits(data, 40, 16, true) * 0.1f;    // DIR_axleSpeed
+  powertrainMs = millis();
+}
+
+void Car::_processFrontTorque(unsigned char len, unsigned char data[]) {
+  if (len < 5) return;
+  frontTorqueNm = _bits(data, 27, 13, true) * 2.0f;  // DIF_torqueActual
+}
+
+void Car::_processRearPower(unsigned char len, unsigned char data[]) {
+  if (len < 2) return;
+  rearPowerKw = _bits(data, 0, 11, true) * 0.5f;     // RearPower266
+}
+
+void Car::_dispatchVehicleFrame(long unsigned int rxId, unsigned char len, unsigned char data[]) {
+  switch (rxId) {
+    case 0x3F5: _processLights(len, data); break;
+    case 0x273: _processVehicleControl(len, data); break;
+    case 0x103: _processRightDoors(len, data); break;
+    case 0x102: _processLeftDoors(len, data); break;
+    case 0x2E1: _processVehicleStatus(len, data); break;
+    case 0x118: _processGear(len, data); break;
+    case 0x257: _processSpeed(len, data); break;
+    case 0x108: _processRearTorque(len, data); break;
+    case 0x186: _processFrontTorque(len, data); break;
+    case 0x266: _processRearPower(len, data); break;
+  }
 }
 
 void Car::_processVehicleStatus(unsigned char len, unsigned char data[]) {
@@ -244,22 +301,16 @@ void Car::_processVehicleControl(unsigned char len, unsigned char data[]) {
 }
 
 void Car::process() {
-  if (_v_enabled && _VCAN->checkReceive()) {
+  // checkReceive() returns CAN_MSGAVAIL or CAN_NOMSG (both non-zero), so
+  // compare explicitly. Drain a few frames per call: the powertrain IDs
+  // arrive at 50-100 Hz and the MCP2515 has only two RX buffers.
+  for (byte i = 0; i < 8 && _v_enabled && _VCAN->checkReceive() == CAN_MSGAVAIL; i++) {
     long unsigned int rxId;
     unsigned char len = 0;
-    unsigned char rxBuf[8];
-    _VCAN->readMsgBuf(&rxId, &len, rxBuf);
-    if (rxId == 0x3F5) {
-      _processLights(len, rxBuf);
-    } else if (rxId == 0x103) {
-      _processRightDoors(len, rxBuf);
-    } else if (rxId == 0x102) {
-      _processLeftDoors(len, rxBuf);
-    } else if (rxId == 0x2E1) {
-      _processVehicleStatus(len, rxBuf);
-    } else if (rxId == 0x118) {
-      _processGear(len, rxBuf);
-    }
+    unsigned char rxBuf[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    if (_VCAN->readMsgBuf(&rxId, &len, rxBuf) != CAN_OK)
+      break;
+    _dispatchVehicleFrame(rxId & 0x7FF, len, rxBuf);
   }
 
   if (_v_twai_enabled) {
@@ -310,7 +361,7 @@ void Car::process() {
     }
   }
 
-  if (_c_enabled && _CCAN->checkReceive()) {
+  if (_c_enabled && _CCAN->checkReceive() == CAN_MSGAVAIL) {
     long unsigned int rxId;
     unsigned char len = 0;
     unsigned char rxBuf[8];
@@ -349,18 +400,6 @@ void Car::_handle_twai_rx_message(twai_message_t &message) {
     for (int i = 0; i < message.data_length_code; i++) {
       rxBuf[i] = message.data[i];
     }
-    if (rxId == 0x3F5) {
-      _processLights(len, rxBuf);
-    } else if (rxId == 0x273) {
-      _processVehicleControl(len, rxBuf);
-    } else if (rxId == 0x103) {
-      _processRightDoors(len, rxBuf);
-    } else if (rxId == 0x102) {
-      _processLeftDoors(len, rxBuf);
-    } else if (rxId == 0x2E1) {
-      _processVehicleStatus(len, rxBuf);
-    } else if (rxId == 0x118) {
-      _processGear(len, rxBuf);
-    }
+    _dispatchVehicleFrame(rxId, len, rxBuf);
   }
 }
